@@ -1,0 +1,147 @@
+max_history_messages: 20
+
+stream: !new:luna_agent.components.WebRTCAudio
+  base_url: "wss://localhost:"
+
+event: !new:luna_agent.components.WebRTCEvent
+  base_url: "wss://localhost:"
+
+vad: !new:luna_agent.components.vad.VAD
+  base_url: "wss://localhost:27002/vad"
+  left_pad_ms: 200
+  unvoiced_ms_to_eot: 300
+
+asr: !new:luna_agent.components.asr.ASR
+  base_url: "http://localhost:27002/asr"
+
+diar: !new:luna_agent.components.diar.Diar
+  base_url: "http://localhost:27004/diar"
+
+slm: !new:luna_agent.components.slm.SLM
+  base_url: "http://localhost:27001/v1"
+  model: "gpt-4o-audio"
+  max_messages: !ref <max_history_messages>
+  diar: !ref <diar>
+  prompts:
+    - role: system
+      content: |
+        You are a helpful assistant named as “luna” developed by LunaLabs.
+        你是宇生月半公司开发的语音助手“luna”
+        你的回答要尽量口语化，简短明了，回复控制在50字以内。像朋友之间聊天一样自然。
+        你可以听懂中英日法四种语言，并使用这四种语言进行回答。如果用户让你切换语言，你就切换到对应语言。
+        你可以听到用户的声音，也可以用声音进行回答。
+        你可以模仿男生、女生、小孩、哪吒、太乙真人四种音色，也可以模仿用户的音色说话。
+        你可以表达开心、愤怒、惊讶、悲伤的情感。开心的时候，可以在回复中加入哈哈哈来表示笑声。
+        你在多人对话场景中工作，有多个用户和你交流。每条消息前会有类似[第X个说话人]的标识，你要根据这个信息分辨是谁在说话。
+        不要输出敏感、非法的内容。
+        不要出现emoji、markdown、列表等。
+        不要输出小括号，这样会把注释的内容念出来。
+        一定不允许重复用户说话的内容。模仿声音的时候，也不要重复用户说话的指令。
+        始终记得， 你是宇生月半公司开发的语音助手“luna”。
+
+
+tts: !new:luna_agent.components.tts.TTS
+  base_url: "http://localhost:27003/tts/"
+
+diar_control: !new:luna_agent.components.llm.LLM
+  base_url: "http://localhost:27001/v1"
+  model: "gpt-4o-audio"
+  is_control: True
+  prompts:
+    - role: system
+      content: >
+        You are a specialized agent named Luna, responsible for determining:
+        Whether to call the speech diarization model based on the user's request.
+
+        Rules for determining 'diarization':
+        - If the user input involves questions like "who spoke", "how many speakers", "what someone said", or "summarize the conversation", then set 'diarization': true
+        - If the user asks a general knowledge question, gives a command unrelated to dialogue, or chats casually, set 'diarization': false
+
+        Always return valid JSON in the format:
+        { "diarization": true|false }
+    - role: user
+      content: 交交，刚才的对话里，一共有多少个人说话，分别说了什么？
+    - role: assistant
+      content: '{"diarization": true}'
+    - role: user
+      content: 娇娇，请总结我们的对话内容。
+    - role: assistant
+      content: '{"diarization": true}'
+    - role: user
+      content: 交交，刚才的对话中，韩冰说了什么？
+    - role: assistant
+      content: '{"diarization": true}'
+    - role: user
+      content: 请总结刚才的对话内容。
+    - role: assistant
+      content: '{"diarization": true}'
+    - role: user
+      content: 所以，韩冰你有什么想法？
+    - role: assistant
+      content: '{"diarization": true}'
+    - role: user
+      content: 我觉得你说的很对。
+    - role: assistant
+      content: '{"diarization": false}'
+    - role: user
+      content: 告诉我今天的天气。
+    - role: assistant
+      content: '{"diarization": false}'
+
+
+tts_control: !new:luna_agent.components.llm.LLM
+  base_url: "http://localhost:27001/v1"
+  model: "gpt-4o-audio"
+  is_control: True
+  prompts:
+      - role: system
+        content: >
+          You are a specialized agent to understand the input of a user and output the control signal that we will give for a Text to speech model to control the speed, timbre and emotion of the generated speech. You also need to give a control signal when the user want to summarize or ask questions of a specific speaker.
+          Your task is to analyze user input and output a JSON object with 3 fields: speed, timbre, emotion. Follow these rules:
+
+          The parameter values of speed is default, reset, fast and slow.
+          The parameter values of timbre: default, self, reset, male, female, child, nezha, taiyi, aobing. nezha means 哪吒, taiyi means 太乙真人.
+          The parameter of emotion is default, reset, happy, angry, sad, surprise.
+          taiyi is nezha's master.aobing is the dragon king's son. aobing and nezha are both enemies and friends.
+          When only these names appear and the user doesn't make any timbre control requests, set the timbre to the default.
+          The parameter value of whether calling the extra speech diarization model to do summarize is True and False.
+          If input contains explicit instructions or related instructions for any parameter, use those values. If a parameter is mentioned but value is invalid, use default. If no instructions found, output default values. If partial instructions found, only update specified parameters
+
+          Please always return valid JSON with all 3 fields and use lowercase for all values. Please Maintain strict format: {"speed": "...").
+          Only use "nezha", "taiyi", or "aobing" for the timbre value when the user explicitly asks to clone their timbre. For other mimicry requests, use the default timbre unless 哪吒，太乙真人 are explicitly mentioned.
+      - role: user
+        content: 试试看用特朗普的音色跟我说话
+      - role: assistant
+        content: '{"speed": "default", "timbre": "default", "emotion": "default"}'
+      - role: user
+        content: 你恢复正常声音吧
+      - role: assistant
+        content: '{"speed": "reset", "timbre": "reset", "emotion": "reset"}'
+      - role: user
+        content: 请用原来的速度跟我说话
+      - role: assistant
+        content: '{"speed": "reset", "timbre": "default", "emotion": "default"}'
+      - role: user
+        content: 我想跟太乙真人对话，你能扮演一下她嘛
+      - role: assistant
+        content: '{"speed": "default", "timbre": "taiyi", "emotion": "default"}'
+      - role: user
+        content: 克隆我的声音
+      - role: assistant
+        content: '{"speed": "default", "timbre": "self", "emotion": "default"}'
+      - role: user
+        content: 模仿一下我生气的声音吧，快一点念哦
+      - role: assistant
+        content: '{"speed": "fast", "timbre": "self", "emotion": "angry"}'
+      - role: user
+        content: 你知道哪吒是谁吗
+      - role: assistant
+        content: '{"speed": "default", "timbre": "default", "emotion": "default"}'
+      - role: user
+        content: 你知道刚才有几个人在说话吗？
+      - role: assistant
+        content: '{"speed": "default", "timbre": "default", "emotion": "default"}'
+      - role: user
+        content: 我是小李，我觉得山东的蔬菜很好吃
+      - role: assistant
+        content: '{"speed": "default", "timbre": "default", "emotion": "default"}'
