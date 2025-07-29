@@ -37,19 +37,25 @@ class LLM:
         self.client = AsyncOpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.prompts = prompts
-        if is_control:
-            self.__call__ = self.__call_control__
+        self.is_control = is_control
 
-    async def __call__(self, messages):
-        completion = await self.client.chat.completions.create(
-            model=self.model,
-            messages=self.prompts + messages,
-            stream=True,
-        )
-        async for chunk in completion:
-            yield chunk.choices[0].delta.content
+    async def __call__(self, param: List | str):
+        """
+        in control mode, param should be text string,
+        in non-control mode (chat mode), param should be a list of history messages.
+        """
+        async def iterator(messages):
+            completion = await self.client.chat.completions.create(
+                model=self.model,
+                messages=self.prompts + messages,
+                stream=True,
+            )
+            async for chunk in completion:
+                yield chunk.choices[0].delta.content
+        if not self.is_control:
+            return iterator(param)
 
-    async def __call_control__(self, text):
+        text = param
         completion = await self.client.chat.completions.create(
             model=self.model,
             messages=self.prompts + [{"role": "user", "content": text}],

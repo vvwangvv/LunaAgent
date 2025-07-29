@@ -1,8 +1,8 @@
 import logging
 import argparse
-import asyncio
+from luna_agent.utils import safe_create_task
 from hyperpyyaml import load_hyperpyyaml
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 import uvicorn
 from luna_agent.agent import LunaAgent
 
@@ -21,13 +21,22 @@ args, _ = parser.parse_known_args()
 app = FastAPI()
 
 
-@app.get("/start_session")
-async def start_session(sample_rate: int):
+@app.post("/start_session")
+async def start_session(request: Request):
+    body = await request.json()
+    sample_rate = body.get("sample_rate", 16000)
     config = load_hyperpyyaml(args.config)
     session = await LunaAgent.create(config, user_audio_sample_rate=sample_rate)
-    asyncio.create_task(session.listen())
+    safe_create_task(session.listen())
     logger.info(f"Started session with id: {session.session_id}")
     return {"session_id": session.session_id}
+
+@app.post("/mute")
+async def mute(request: Request):
+    body = await request.json()
+    session_id = body.get("session_id")
+    LunaAgent.sessions.get(session_id).user_mute_self()
+    return {"status": "success"}
 
 
 if __name__ == "__main__":

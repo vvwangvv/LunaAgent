@@ -1,4 +1,5 @@
 from typing import Dict, List
+from pathlib import Path
 import itertools
 import asyncio
 import logging
@@ -16,14 +17,14 @@ class LunaAgent:
     sessions = {}
 
     def __init__(self, config):
-        self.vad: VAD = config.vad
-        self.asr: ASR = config.asr
-        self.slm: SLM = config.slm
-        self.tts: TTS = config.tts
-        self.stream: WebRTCAudio = config.stream
-        self.event: WebRTCEvent = config.event
-        self.tts_control: Optional[LLM] = config.tts_control
-        self.diar_control: Optional[LLM] = config.diar_control
+        self.vad: VAD = config["vad"]
+        self.asr: ASR = config["asr"]
+        self.slm: SLM = config["slm"]
+        self.tts: TTS = config["tts"]
+        self.stream: WebRTCAudio = config["stream"]
+        self.event: WebRTCEvent = config["event"]
+        self.tts_control: Optional[LLM] = config["tts_control"]
+        self.diar_control: Optional[LLM] = config["diar_control"]
 
         self.session_id = uuid4().hex
         self.sample_rate = 16000
@@ -55,12 +56,21 @@ class LunaAgent:
                     await asyncio.sleep(0)
                     continue
                 buffer, self.buffer = buffer, b""
-                async for user_is_speaking, user_speech in await self.vad(buffer):
-                    self.user_is_speaking = user_is_speaking
-                    if user_speech:
-                        safe_create_task(self.response(user_speech))
+                await self.vad(buffer)
 
-        await asyncio.gather(receive_user_audio(), detect_speech())
+        async def response_if_speech():
+            prev_response_task = None
+            async for user_is_speaking, user_speech in await self.vad.results():
+                self.user_is_speaking = user_is_speaking
+                if user_speech:
+                    if prev_response_task and not prev_response_task.done():
+                        prev_response_task.cancel()
+                    prev_response_task = safe_create_task(self.response(user_speech))
+
+        await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
+    
+    def user_mute_self(self):
+        self.buffer += b"0x00" * self.sample_rate
 
     async def response(self, user_speech: bytes):
         response_id = uuid4().hex
@@ -77,14 +87,15 @@ class LunaAgent:
         )
         tts_control, diar_control = await asyncio.gather(tts_control_task, diar_control_task)
 
-        if not diar_control.get("response", True):
+        if self.user_is_speaking or not diar_control.get("response", True):
             return
 
         agent_text_iterator = await slm_task
         agent_text_iterator1, agent_text_iterator2 = itertools.tee(agent_text_iterator, 2)
-        agent_speech_iterator = await self.tts(text=agent_text_iterator1, control=tts_control)
+        tts_task = safe_create_task(self.tts(text=agent_text_iterator1, control=tts_control))
         await self.event.set_avatar(tts_control["avatar"])
 
+        agent_speech_iterator = await tts_task
         async for agent_speech in agent_speech_iterator:
             if self.user_is_speaking:
                 agent_text_iterator.cancel()

@@ -1,18 +1,18 @@
 max_history_messages: 20
 
 stream: !new:luna_agent.components.WebRTCAudio
-  base_url: "wss://localhost:"
+  base_url: "wss://localhost:27020/ws/agent/audio"
 
 event: !new:luna_agent.components.WebRTCEvent
-  base_url: "wss://localhost:"
+  base_url: "ws://localhost:27020/ws/agent/event"
 
 vad: !new:luna_agent.components.vad.VAD
-  base_url: "wss://localhost:27002/vad"
+  base_url: "ws://localhost:27002/vad"
   left_pad_ms: 200
-  unvoiced_ms_to_eot: 300
+  voiced_ms_to_interrupt: 500
 
 asr: !new:luna_agent.components.asr.ASR
-  base_url: "http://localhost:27002/asr"
+  base_url: "http://localhost:27003/asr"
 
 diar: !new:luna_agent.components.diar.Diar
   base_url: "http://localhost:27004/diar"
@@ -41,10 +41,10 @@ slm: !new:luna_agent.components.slm.SLM
 
 
 tts: !new:luna_agent.components.tts.TTS
-  base_url: "http://localhost:27003/tts/"
+  base_url: "http://localhost:27005/cosyvoice/"
 
 diar_control: !new:luna_agent.components.llm.LLM
-  base_url: "http://localhost:27001/v1"
+  base_url: "http://172.31.64.2:27001/v1"
   model: "gpt-4o-audio"
   is_control: True
   prompts:
@@ -90,7 +90,7 @@ diar_control: !new:luna_agent.components.llm.LLM
 
 
 tts_control: !new:luna_agent.components.llm.LLM
-  base_url: "http://localhost:27001/v1"
+  base_url: "http://172.31.64.2:27001/v1"
   model: "gpt-4o-audio"
   is_control: True
   prompts:

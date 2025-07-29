@@ -1,0 +1,83 @@
+services:
+  f5tts:
+    image: f5tts:latest
+    container_name: f5tts
+    expose:
+      - "8999"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    restart: unless-stopped
+
+  cosyvoice:
+    image: cosyvoice:latest
+    container_name: cosyvoice
+    ports:
+      - "27005:8000"
+    environment:
+      F5TTS_URL: "http://f5tts:8999/tts"
+    depends_on:
+      - f5tts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    restart: unless-stopped
+
+  vad:
+    image: silero:latest
+    container_name: vad
+    ports:
+      - "27002:8000"
+    environment:
+      VAD_POOL_SIZZE: 10
+      MIN_SILENCE_DURATION_MS: 300
+      SPEECH_PAD_MS: 100
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    restart: unless-stopped
+
+  asr:
+    image: paraformer:latest
+    container_name: asr
+    ports:
+      - "27003:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    restart: unless-stopped
+
+  diar:
+    image: diar:latest
+    container_name: diar
+    ports:
+      - "27004:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    runtime: nvidia
+    restart: unless-stopped

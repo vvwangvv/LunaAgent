@@ -28,8 +28,8 @@ class TTS:
     def setup(self):
         logger.info("StreamingTTSComponent setup")
 
-    async def tts(self, text, control_params):
-        control_params = control_params.copy()
+    async def tts(self, text: str, control_params = None):
+        control_params = {} if control_params is None else control_params.copy()
         text = text.strip()
         if not text:
             raise StopIteration("No text to synthesize")
@@ -41,19 +41,20 @@ class TTS:
         control_params["dtype"] = "np.int16"
         control_params["ref_text"] = control_params.pop("transcript", "")
 
-        ref_audio = pcm2wav(control_params.pop("speech", None))
-        files = {} if ref_audio is None else {"ref_audio": ref_audio}
+        ref_audio = control_params.pop("speech", None)
+
+        files = {} if ref_audio is None else {"ref_audio": pcm2wav(ref_audio)}
 
         data = {"params": json.dumps(control_params)}
 
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(self.base_url, files=files, data=data, stream=True)
-            for chunk in response.iter_content(chunk_size=4096):
+            response = await client.post(self.base_url, files=files, data=data)
+            async for chunk in response.aiter_bytes(chunk_size=4096):
                 if chunk:
                     logger.debug("Streaming TTS chunk sent")
                     yield chunk
 
-    async def __call__(self, text: AsyncGenerator[str, None] | str, control_params={}):
+    async def __call__(self, text_generateor: AsyncGenerator[str, None] | str, control_params={}):
         control_params["response_id"] = str(uuid4())
         if self.force_default:
             control_params = {
@@ -62,14 +63,15 @@ class TTS:
                 "emotion": "default",
             }
 
-        target_text = ""
-
-        async for text_partial in text:
-            target_text += text_partial
-            tts_text, target_text = extract_tts_text(target_text)
-            if tts_text:
-                async for chunk in self.tts(tts_text, control_params=control_params):
+        async def iterator():
+            text = ""
+            async for text_partial in text_generateor:
+                text += text_partial
+                tts_text, text = extract_tts_text(text)
+                if tts_text:
+                    async for chunk in self.tts(tts_text, control_params=control_params):
+                        yield chunk
+            if text:
+                async for chunk in self.tts(text, control_params=control_params):
                     yield chunk
-        if target_text:
-            async for chunk in self.tts(text, control_params=control_params):
-                yield chunk
+        return iterator()
