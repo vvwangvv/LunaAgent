@@ -2,7 +2,7 @@ import logging
 import argparse
 from luna_agent.utils import safe_create_task
 from hyperpyyaml import load_hyperpyyaml
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from luna_agent.agent import LunaAgent
@@ -23,7 +23,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8000"],  # or ["*"] for all origins
+    allow_origins=["*"],  # or ["*"] for all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,6 +47,18 @@ async def mute(request: Request):
     session_id = body.get("session_id")
     LunaAgent.sessions.get(session_id).mute_user()
     return {"status": "success"}
+
+@app.websocket("/ws/agent/audio/{session_id}")
+async def ws_user_audio(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    LunaAgent.sessions[session_id].stream.ws = websocket
+    await LunaAgent.sessions[session_id].stream.disconnect.wait()
+
+@app.websocket("/ws/agent/event/{session_id}")
+async def ws_user_event(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    LunaAgent.sessions[session_id].event.ws = websocket
+    await LunaAgent.sessions[session_id].event.disconnect.wait()
 
 
 if __name__ == "__main__":

@@ -37,9 +37,8 @@ class LunaAgent:
         session = cls(config)
         await asyncio.gather(
             session.vad.setup(),
-            session.stream.setup(user_audio_sample_rate=user_audio_sample_rate, session_id=session.session_id),
-            session.event.setup(session_id=session.session_id),
             session.slm.setup(session_id=session.session_id),
+            session.stream.setup(user_audio_sample_rate=user_audio_sample_rate),
         )
         cls.sessions[session.session_id] = session
         return session
@@ -47,6 +46,8 @@ class LunaAgent:
     async def listen(self):
 
         async def receive_user_audio():
+            while not self.stream.ready:
+                await asyncio.sleep(0.1)
             async for chunk in self.stream.read():
                 self.buffer += chunk
 

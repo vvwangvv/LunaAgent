@@ -1,7 +1,19 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+import websockets
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 import asyncio
+import httpx
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or ["*"] for all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Shared connections
 connections = {
@@ -19,7 +31,7 @@ async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
         while True:
             if label == "agent_audio -> user_audio":
                 # Receive JSON with base64-encoded audio
-                msg = await src_ws.receive_text()
+                msg = await src_ws.recv()
                 try:
                     payload = json.loads(msg)
                     b64 = payload["data"]
@@ -29,7 +41,10 @@ async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
                 except (json.JSONDecodeError, KeyError, base64.binascii.Error) as e:
                     print(f"[{label}] Error decoding audio JSON: {e}")
             elif label == "agent_event -> user_event" or label == "user_event -> agent_event":
-                msg = await src_ws.receive_text()
+                if label == "agent_event -> user_event":
+                    msg = await src_ws.recv()
+                else:
+                    msg = await src_ws.receive_text()
                 try:
                     event = json.loads(msg)
                     print(f"[{label}] Event: {json.dumps(event, indent=2)}")
@@ -40,11 +55,12 @@ async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
                 assert label == "user_audio -> agent_audio"
                 audio_bytes = await src_ws.receive_bytes()
                 print(f"[{label}] Audio chunk: {len(audio_bytes)} bytes")
-                await dst_ws.send_bytes(audio_bytes)
+                await dst_ws.send(audio_bytes)
     except WebSocketDisconnect:
         print(f"[{label}] disconnected")
     except Exception as e:
         print(f"[{label}] error: {e}")
+        raise
 
 
 async def pair_and_stream(kind: str, session_id: str):
@@ -67,6 +83,7 @@ async def pair_and_stream(kind: str, session_id: str):
         print(f"Forwarding: {kind} -> {peer_kind}")
         await asyncio.gather(
             forward(ws1, ws2, f"{kind} -> {peer_kind}"),
+            forward(ws2, ws1, f"{peer_kind} -> {kind}"),
         )
 
 # Generic handler
@@ -81,15 +98,6 @@ async def websocket_handler(websocket: WebSocket, kind: str, session_id: str):
         await websocket.close()
         print(f"{kind} connection closed")
 
-# Define routes
-@app.websocket("/ws/agent/audio/{session_id}")
-async def ws_agent_audio(websocket: WebSocket, session_id: str):
-    await websocket_handler(websocket, "agent_audio", session_id)
-
-@app.websocket("/ws/agent/event/{session_id}")
-async def ws_agent_event(websocket: WebSocket, session_id: str):
-    await websocket_handler(websocket, "agent_event", session_id)
-
 @app.websocket("/ws/user/audio/{session_id}")
 async def ws_user_audio(websocket: WebSocket, session_id: str):
     await websocket_handler(websocket, "user_audio", session_id)
@@ -98,4 +106,18 @@ async def ws_user_audio(websocket: WebSocket, session_id: str):
 async def ws_user_event(websocket: WebSocket, session_id: str):
     await websocket_handler(websocket, "user_event", session_id)
 
-# uvicorn middleware:app --host 0.0.0.0 --port 27020
+@app.post("/start_session")
+async def start_session(request: Request):
+    forward_url = "http://localhost:8001/start_session"
+    async with httpx.AsyncClient() as client:
+        response = await client.post(forward_url, json=await request.json())
+    
+    session_id = response.json().get("session_id")
+    connections["agent_audio"][session_id] = await websockets.connect(
+        f"ws://localhost:8001/ws/agent/audio/{session_id}"
+    )
+    connections["agent_event"][session_id] = await websockets.connect(
+        f"ws://localhost:8001/ws/agent/event/{session_id}"
+    )
+    print(f"Session started with ID: {session_id}")
+    return Response(content=response.content, media_type=response.headers.get("Content-Type", "application/json"))

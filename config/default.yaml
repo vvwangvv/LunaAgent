@@ -1,10 +1,7 @@
 max_history_messages: 20
 
 stream: !new:luna_agent.components.WebRTCAudio
-  base_url: "ws://localhost:27020/ws/agent/audio"
-
 event: !new:luna_agent.components.WebRTCEvent
-  base_url: "ws://localhost:27020/ws/agent/event"
 
 vad: !new:luna_agent.components.vad.VAD
   base_url: "ws://localhost:27002/vad"
