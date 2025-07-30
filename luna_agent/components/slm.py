@@ -31,7 +31,7 @@ def add_user_message(
                     "data": pcm2base64(audio, sample_rate=16000),
                     "format": "wav",
                 },
-                "id": hashlib.md5(audio).hexdigest,
+                "id": hashlib.md5(audio).hexdigest(),
                 "transcript": transcript,
             }
         )
@@ -67,9 +67,13 @@ class SLM:
         self.completion_params = completion_params
         self.diar = diar
         self.max_messages = max_messages
+    
+    async def setup(self, session_id: str):
+        if self.diar:
+            await self.diar.setup(session_id=session_id)
 
-    async def __call__(self, history: List[Dict], audio: bytes, session_id: str):
-        diar: Dict = await self.diar(audio, session_id=session_id) if self.diar else {}
+    async def __call__(self, history: List[Dict], audio: bytes):
+        diar: Dict = await self.diar(audio) if self.diar else {}
 
         messages = []
         for message in history:
@@ -92,12 +96,13 @@ class SLM:
             logger.info(f">>> {format_msg(message['content']).strip()}")
             messages.append({"role": message["role"], "content": content})
 
+        add_user_message(messages, audio=audio)
         completion = await self.client.chat.completions.create(
             model=self.model, messages=self.prompts + messages, stream=True, **self.completion_params
         )
 
-        async def iterator():
+        async def generator():
             async for chunk in completion:
                 yield chunk.choices[0].delta.content
 
-        return iterator()
+        return generator()

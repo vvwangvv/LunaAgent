@@ -1,7 +1,7 @@
 max_history_messages: 20
 
 stream: !new:luna_agent.components.WebRTCAudio
-  base_url: "wss://localhost:27020/ws/agent/audio"
+  base_url: "ws://localhost:27020/ws/agent/audio"
 
 event: !new:luna_agent.components.WebRTCEvent
   base_url: "ws://localhost:27020/ws/agent/event"
@@ -15,10 +15,10 @@ asr: !new:luna_agent.components.asr.ASR
   base_url: "http://localhost:27003/asr"
 
 diar: !new:luna_agent.components.diar.Diar
-  base_url: "http://localhost:27004/diar"
+  base_url: "http://localhost:27004/diarization/"
 
 slm: !new:luna_agent.components.slm.SLM
-  base_url: "http://localhost:27001/v1"
+  base_url: "http://172.31.64.2:27001/v1"
   model: "gpt-4o-audio"
   max_messages: !ref <max_history_messages>
   diar: !ref <diar>

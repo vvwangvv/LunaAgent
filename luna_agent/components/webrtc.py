@@ -13,8 +13,8 @@ class WebRTCAudio:
         self.resampler = None
         self.sample_rate = 16000
 
-    async def setup(self, user_audio_sample_rate: int):
-        self.ws = await websockets.connect(self.base_url)
+    async def setup(self, session_id: str, user_audio_sample_rate: int):
+        self.ws = await websockets.connect(f"{self.base_url}/{session_id}")
         if user_audio_sample_rate != self.sample_rate:
             self.resampler = soxr.Resampler(
                 channels=1,
@@ -24,9 +24,7 @@ class WebRTCAudio:
             )
 
     async def read(self) -> AsyncGenerator[bytes, None]:
-        async for message in self.ws:
-            message = json.loads(message)
-            chunk = base64.b64decode(message["data"].encode("utf-8"))
+        async for chunk in self.ws:
             if self.resampler:
                 chunk = self.resample_bytes(chunk)
             yield chunk
@@ -36,7 +34,7 @@ class WebRTCAudio:
             "response_id": response_id,
             "data": base64.b64encode(audio).decode("utf-8"),
         }
-        await self.ws.write(json.dumps(payload))
+        await self.ws.send(json.dumps(payload))
 
     def resample_bytes(self, audio: bytes) -> bytes:
         """Stateful chunk-wise resample with soxr."""
@@ -53,18 +51,8 @@ class WebRTCEvent:
         self.base_url = base_url
         self.ws = None
 
-    async def setup(self):
-        self.ws = await websockets.connect(self.base_url)
-
-    async def start_session(self, session_id):
-        await self.ws.send(
-            json.dumps(
-                {
-                    "event": "start_session",
-                    "data": {"session_id": session_id},
-                }
-            )
-        )
+    async def setup(self, session_id: str):
+        self.ws = await websockets.connect(f"{self.base_url}/{session_id}")
 
     async def set_agent_can_speak(self, agent_can_speak: bool):
         await self.ws.send(

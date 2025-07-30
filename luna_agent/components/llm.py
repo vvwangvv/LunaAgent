@@ -44,16 +44,17 @@ class LLM:
         in control mode, param should be text string,
         in non-control mode (chat mode), param should be a list of history messages.
         """
-        async def iterator(messages):
+        if not self.is_control:
+            messages = param
             completion = await self.client.chat.completions.create(
                 model=self.model,
                 messages=self.prompts + messages,
                 stream=True,
             )
-            async for chunk in completion:
-                yield chunk.choices[0].delta.content
-        if not self.is_control:
-            return iterator(param)
+            async def generator():
+                async for chunk in completion:
+                    yield chunk.choices[0].delta.content
+            return generator()
 
         text = param
         completion = await self.client.chat.completions.create(
@@ -68,7 +69,7 @@ class LLM:
     def fix_control(self, **control_params):
         controls = {
             "diarization": False,
-            "response": None,
+            "response": True,
             "emotion": "default",
             "speed": "default",
             "timbre": "default",

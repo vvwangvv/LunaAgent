@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Voice Chat App with Microphone Waveform Animation</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="/static/bootstrap.min.css"">
+  <link rel="stylesheet" href="/static/font-awesome/css/all.min.css">">
+  <link rel="stylesheet" href="/static/bg.css">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="chat-container relative mx-auto w-100 h-100 max-w-full overflow-hidden bg-gradient-to-br from-[--color-a] via-[--color-b] to-[--color-c] text-white duration-500 ease-in [transition-property:_--color-a,_--color-b,_--color-c] before:absolute before:left-[20%] before:top-[10%] before:h-[50%] before:w-[70%] before:origin-[60%] before:animate-blob before:bg-gradient-to-br before:from-[--color-a] before:to-[--color-b] before:blur-[50px] before:brightness-125 after:absolute after:left-[40%] after:top-[30%] after:h-[80%] after:w-[70%] after:origin-[60%] after:animate-blob-reverse after:bg-gradient-to-br after:from-[--color-a] after:to-[--color-b] after:blur-[50px] after:brightness-125" style="--color-a: rgb(51, 153, 255, 0.3); --color-b: rgb(244, 229, 77, 0.3); --color-c: rgb(255, 170, 51, 0.3)">
+    <div class="d-flex mx-auto justify-content-between aspect-[9/16] flex-column mw-100 mh-100">
+    <!-- <div class="logo" id="logo"> <img src="./{{ url_for('static', filename='logo.png') }}"/> </div> -->
+      <!-- Transcript section -->
+      <div class="transcript" id="transcript">
+        <p><strong>User:</strong> Hello!</p>
+        <p><strong>Agent:</strong> Hi there, how can I help?</p>
+      </div>
+      <!-- Transcript toggle icon -->
+      <div class="transcript-toggle" id="transcriptToggle">
+        <i class="fas fa-comments"></i>
+      </div>
+      <!-- Center animated circle -->
+      <div class="circle mx-auto w-75" id="agentCircle">
+          <div class="background-moving"></div>
+          <div class="avatar"><img id="agentAvatar" src="/static/agent_avatar/default.png"/></div>
+      </div>
+      <!-- New call button (green) -->
+      <div class="px-4 py-5 w-100 flex items-center justify-center" id="idleControls">
+        <button class="call-btn w-25" id="newCallBtn">
+          <i class="fas fa-phone fa-fw"></i>
+        </button>
+      </div>
+
+      <div class="px-4 py-5 w-100 justify-content-between d-none" id="chatControls">
+      <!-- Hangup button (red) -->
+        <button class="hangup-btn w-25" id="hangupBtn">
+          <i class="fas fa-xmark fa-fw"></i>
+        </button>
+        <div class="d-flex flex-column justify-content-around">
+          <div class="d-flex justify-content-center" id="micViz">
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+          <div class="status-text" id="statusText">Listening</div>
+        </div>
+        <!-- Microphone toggle button -->
+        <button class="mic-toggle-btn w-25" id="micToggleBtn">
+          <i class="fas fa-microphone fa-fw"></i>
+        </button>
+      </div>
+    </div>
+    <!-- Animated voice dots -->
+  </div>
+
+  <!-- jQuery and Bootstrap JS (for simplicity) -->
+  <script src="/static/jquery-3.5.1.min.js"></script>
+  <script src="/static/bootstrap.min.js"></script>
+  <script>
+  let wsAudio, wsEvent;
+  let sessionId = '';
+  let micAudioContext, playbackAudioContext;
+  let micProcessor, micStreamSource;
+  let micStream;
+  let isSessionStarted = false;
+  let isListening = true;
+  let speaker2avatar = {
+    "default": "/static/agent_avatar/default.png",
+    "female": "/static/agent_avatar/female.png",
+    "male": "/static/agent_avatar/male.png",
+    "nezha": "/static/agent_avatar/nezha.png",
+    "taiyi": "/static/agent_avatar/taiyi.png",
+    "aobing": "/static/agent_avatar/aobing.png",
+    "child": "/static/agent_avatar/child.png",
+    "self": "/static/agent_avatar/self.png",
+  };
+
+  let playBuffer = [];
+  let scriptNode;
+
+  $(document).ready(function () {
+    $('#newCallBtn').click(() => {
+      $('#idleControls').addClass('d-none');
+      $('#chatControls').removeClass('d-none').addClass('d-flex');
+      startSession();
+    });
+
+    $('#hangupBtn').click(() => {
+      $('#chatControls').addClass('d-none').removeClass('d-flex');
+      $('#idleControls').removeClass('d-none');
+      $('#agentCircle').css('transform', 'scale(.9)');
+      stopSession();
+    });
+
+    $('#micToggleBtn').click(function () {
+      isListening = !isListening;
+      $(this).toggleClass('muted');
+      $(this).html(isListening
+        ? '<i class="fas fa-microphone"></i>'
+        : '<i class="fas fa-microphone-slash"></i>'
+      );
+      $(this).css('color', isListening ? 'black' : '#FE3A2E');
+    });
+  });
+
+  async function startSession() {
+    if (isSessionStarted) return;
+    isSessionStarted = true;
+
+    micAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    if (micAudioContext.state === 'suspended') {
+      await micAudioContext.resume();
+    }
+
+    const response = await fetch(`http://localhost:8001/start_session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sample_rate: 16000 })
+    });
+    const responseData = await response.json();
+    sessionId = responseData.session_id;
+
+    wsAudio = new WebSocket(`ws://localhost:27020/ws/user/audio/${sessionId}`);
+    wsEvent = new WebSocket(`ws://localhost:27020/ws/user/event/${sessionId}`);
+    wsAudio.binaryType = 'arraybuffer';
+
+    initAudioPlayback();
+
+    wsAudio.onopen = async () => {
+      console.log("Audio WebSocket opened");
+      startWebSocketPlayback();
+      await streamMicrophone();
+    };
+  }
+
+  async function stopSession() {
+    if (!isSessionStarted) return;
+    isSessionStarted = false;
+
+    if (micStream) {
+      const tracks = micStream.getTracks();
+      tracks.forEach(track => track.stop());
+    }
+
+    if (micProcessor && micStreamSource) {
+      micStreamSource.disconnect(micProcessor);
+      micProcessor.disconnect();
+    }
+
+    if (wsAudio) wsAudio.close();
+    if (wsEvent) wsEvent.close();
+
+    playBuffer = [];
+    if (scriptNode) scriptNode.disconnect();
+    if (micAudioContext) micAudioContext.close();
+    if (playbackAudioContext) playbackAudioContext.close();
+  }
+
+  async function streamMicrophone() {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStreamSource = micAudioContext.createMediaStreamSource(micStream);
+
+    micProcessor = micAudioContext.createScriptProcessor(4096, 1, 1);
+    micStreamSource.connect(micProcessor);
+    micProcessor.connect(micAudioContext.destination); // Needed for some browsers
+
+    micProcessor.onaudioprocess = (event) => {
+      if (!isListening) return;
+      const input = event.inputBuffer.getChannelData(0);
+      const pcm16 = float32ToInt16(input);
+      if (wsAudio && wsAudio.readyState === WebSocket.OPEN) {
+        wsAudio.send(pcm16);
+      }
+    };
+  }
+
+  function float32ToInt16(buffer) {
+    const result = new Int16Array(buffer.length);
+    for (let i = 0; i < buffer.length; i++) {
+      const s = Math.max(-1, Math.min(1, buffer[i]));
+      result[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return result.buffer;
+  }
+
+  function int16ToFloat32(int16Array) {
+    const float32Array = new Float32Array(int16Array.length);
+    for (let i = 0; i < int16Array.length; i++) {
+      float32Array[i] = int16Array[i] / 32768;
+    }
+    return float32Array;
+  }
+
+  function initAudioPlayback() {
+    playbackAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    scriptNode = playbackAudioContext.createScriptProcessor(4096, 1, 1);
+    scriptNode.onaudioprocess = (e) => {
+      const output = e.outputBuffer.getChannelData(0);
+      for (let i = 0; i < output.length; i++) {
+        output[i] = playBuffer.length > 0 ? playBuffer.shift() : 0;
+      }
+    };
+    scriptNode.connect(playbackAudioContext.destination);
+  }
+
+  function startWebSocketPlayback() {
+    wsAudio.onmessage = (event) => {
+      const int16 = new Int16Array(event.data);
+      const float32 = int16ToFloat32(int16);
+      playBuffer.push(...float32);
+    };
+  }
+</script>
+
+</body>

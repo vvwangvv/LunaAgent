@@ -1,7 +1,8 @@
 import asyncio
+from asyncstdlib.itertools import tee
 import soundfile as sf
 import numpy as np
-from luna_agent.utils import pcm2wav
+from luna_agent.utils import pcm2wav, safe_create_task
 
 from hyperpyyaml import load_hyperpyyaml
 
@@ -43,20 +44,18 @@ def test_tts():
     }
     async def dummy_generator():
         text = "今天天气真不错，适合出去玩。" * 2
-        async def iterator():
+        async def generator():
             for i in range(0, len(text), 3):
                 yield text[i : i + 3]
-        return iterator()
+        return generator()
 
     async def fun():
         tts = config["tts"]
-        slm_task = asyncio.create_task(dummy_generator())
-        text_iterator = await slm_task
+        text_generator = await safe_create_task(dummy_generator())
 
-        tts_task = asyncio.create_task(tts(text_iterator, control_params=control_params))
-        speech_iterator = await tts_task
+        speech_generator = await safe_create_task(tts(text_generator, control_params=control_params))
         speech = b""
-        async for chunk in speech_iterator:
+        async for chunk in speech_generator:
             speech += chunk
         with open("./tests/output.wav", "wb") as f:
             f.write(pcm2wav(speech, 16000))
@@ -81,15 +80,23 @@ def test_diar_control():
 
 def test_diar():
     async def fun():
-        text = "how many speakers are there in this audio?"
         diar = config["diar"]
-        control = await diar(text)
-        assert control["diarization"] 
+        result = await diar(audio, "debug")
     asyncio.run(fun())
 
-# def test_slm():
-#     async def fun():
-#         slm = config["slm"]
-#         transcript = await slm(pcm2wav(audio))
-#         print(f"transcript: {transcript}")
-#     asyncio.run(fun())
+def test_slm():
+    async def fun():
+        slm = config["slm"]
+        history = []
+        text_generator = await safe_create_task(slm(history, audio, "debug"))
+        t1, t2 = tee(text_generator, 2)  # Ensure the iterator can be reused
+        i = 0
+        async for chunk in t1:
+            i += 1
+            if i >= 3:
+                await text_generator.aclose()
+                break
+            print(chunk, end="")
+        response = ''.join([chunk async for chunk in t2])
+        print(response)
+    asyncio.run(fun())

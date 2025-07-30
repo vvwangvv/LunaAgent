@@ -15,9 +15,12 @@ class Diar:
         self.max_speaker_num = max_speaker_num
         self.speaker_num = speaker_num
 
-    async def __call__(self, audio: bytes, session_id: str):
+    async def setup(self, session_id: str):
+        self.session_id = session_id
+
+    async def __call__(self, audio: bytes):
         params = {
-            "session_id": session_id,
+            "session_id": self.session_id,
             "sent_id": hashlib.md5(audio).hexdigest(),
             "min_spk": self.min_speaker_num,
             "max_spk": self.max_speaker_num,
