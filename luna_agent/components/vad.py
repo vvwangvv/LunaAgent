@@ -16,11 +16,6 @@ class VAD:
         self.ws = await websockets.connect(self.base_url)
 
     async def __call__(self, chunk: bytes) -> AsyncGenerator[Tuple[bool, bytes], None]:
-        """
-        Process audio chunk and yield user speech
-        :param chunk: Audio chunk in bytes
-        :return: Generator yielding tuples of (is_user_speaking, user_speech)
-        """
         self.data += chunk
         await self.ws.send(chunk)
 

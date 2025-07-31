@@ -7,7 +7,7 @@ from typing import AsyncGenerator
 from fastapi import WebSocketDisconnect
 
 
-class WebRTCAudio:
+class WebRTCData:
     def __init__(self):
         self.ws = None
         self.resampler = None
@@ -41,13 +41,14 @@ class WebRTCAudio:
         finally:
             self.disconnect.set()
 
-    async def write(self, audio: bytes, response_id: str):
+    async def write(self, data: bytes | str, **params):
         if not self.ready:
             raise RuntimeError("WebSocket connection is not established")
-        payload = {
-            "response_id": response_id,
-            "data": base64.b64encode(audio).decode("utf-8"),
-        }
+        data_type = "text"
+        if isinstance(data, bytes):
+            data = base64.b64encode(data).decode("utf-8")
+            data_type = "bytes"
+        payload = {"data": data, "data_type": data_type, **params}
         await self.ws.send_text(json.dumps(payload))
 
     def resample_bytes(self, audio: bytes) -> bytes:

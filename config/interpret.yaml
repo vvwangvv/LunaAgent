@@ -1,0 +1,5 @@
+stream: !new:luna_agent.components.WebRTCAudio
+event: !new:luna_agent.components.WebRTCEvent
+
+interpret: !new:luna_agent.components.interpret.Interpret
+  base_url: "ws://localhost:27006/interpret"

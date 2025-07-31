@@ -1,15 +1,25 @@
-from typing import Dict, List
-from asyncstdlib.itertools import tee
+import argparse
 import asyncio
 import logging
+import uvicorn
 from uuid import uuid4
 from typing import Optional
+from typing import Dict, List
+from asyncstdlib.itertools import tee
+from hyperpyyaml import load_hyperpyyaml
+from fastapi import FastAPI, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 
 from luna_agent.utils import safe_create_task
-from luna_agent.components import ASR, LLM, SLM, TTS, WebRTCEvent, WebRTCAudio, VAD
+from luna_agent.components import ASR, LLM, SLM, TTS, WebRTCEvent, WebRTCData, VAD
 from luna_agent.components.slm import add_user_message, add_agent_message
 
+logging.basicConfig(
+    format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger("luna_agent")
+logger.setLevel(logging.INFO)
 
 
 class LunaAgent:
@@ -20,7 +30,7 @@ class LunaAgent:
         self.asr: ASR = config["asr"]
         self.slm: SLM = config["slm"]
         self.tts: TTS = config["tts"]
-        self.stream: WebRTCAudio = config["stream"]
+        self.stream: WebRTCData = config["stream"]
         self.event: WebRTCEvent = config["event"]
         self.tts_control: Optional[LLM] = config["tts_control"]
         self.diar_control: Optional[LLM] = config["diar_control"]
@@ -103,7 +113,7 @@ class LunaAgent:
             async for agent_speech in agent_speech_generator:
                 if self.user_is_speaking:
                     break
-                await self.stream.write(agent_speech, response_id)
+                await self.stream.write(agent_speech, response_id=response_id)
         except asyncio.CancelledError:
             logger.info(f"response {response_id} cancelled")
         finally:
@@ -121,3 +131,53 @@ class LunaAgent:
         if self._user_is_speaking != user_is_speaking:
             self.event.set_agent_can_speak(agent_can_speak=not user_is_speaking)
         self._user_is_speaking = user_is_speaking
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--config", type=str, help="Path to the config file", default="config/default.yaml")
+parser.add_argument("--port", type=int, default=8000)
+args, _ = parser.parse_known_args()
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or ["*"] for all origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.post("/start_session")
+async def start_session(request: Request):
+    body = await request.json()
+    sample_rate = body.get("sample_rate", 16000)
+    with open(args.config, "r") as f:
+        config = load_hyperpyyaml(f)
+    session = await LunaAgent.create(config, user_audio_sample_rate=sample_rate)
+    safe_create_task(session.listen())
+    logger.info(f"Started session with id: {session.session_id}")
+    return {"session_id": session.session_id}
+
+@app.post("/mute")
+async def mute(request: Request):
+    body = await request.json()
+    session_id = body.get("session_id")
+    LunaAgent.sessions.get(session_id).mute_user()
+    return {"status": "success"}
+
+@app.websocket("/ws/agent/audio/{session_id}")
+async def ws_user_audio(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    LunaAgent.sessions[session_id].stream.ws = websocket
+    await LunaAgent.sessions[session_id].stream.disconnect.wait()
+
+@app.websocket("/ws/agent/event/{session_id}")
+async def ws_user_event(websocket: WebSocket, session_id: str):
+    await websocket.accept()
+    LunaAgent.sessions[session_id].event.ws = websocket
+    await LunaAgent.sessions[session_id].event.disconnect.wait()
+
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="0.0.0.0", port=args.port)
