@@ -51,33 +51,3 @@ services:
               capabilities: [gpu]
     runtime: nvidia
     restart: unless-stopped
-
-  asr:
-    image: paraformer:latest
-    container_name: asr
-    ports:
-      - "27003:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    runtime: nvidia
-    restart: unless-stopped
-
-  diar:
-    image: diar:latest
-    container_name: diar
-    ports:
-      - "27004:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    runtime: nvidia
-    restart: unless-stopped

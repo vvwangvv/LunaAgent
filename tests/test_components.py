@@ -39,7 +39,7 @@ def test_vad():
     asyncio.run(fun())
 
 def test_tts():
-    control_params = {
+    control = {
         "speech": audio,
     }
     async def dummy_generator():
@@ -53,7 +53,7 @@ def test_tts():
         tts = config["tts"]
         text_generator = await safe_create_task(dummy_generator())
 
-        speech_generator = await safe_create_task(tts(text_generator, control_params=control_params))
+        speech_generator = await safe_create_task(tts(text_generator, control=control))
         speech = b""
         async for chunk in speech_generator:
             speech += chunk
@@ -81,14 +81,16 @@ def test_diar_control():
 def test_diar():
     async def fun():
         diar = config["diar"]
-        result = await diar(audio, "debug")
+        await diar.setup(session_id="debug")
+        result = await diar(audio)
     asyncio.run(fun())
 
 def test_slm():
     async def fun():
         slm = config["slm"]
+        await slm.setup(session_id="debug")
         history = []
-        text_generator = await safe_create_task(slm(history, audio, "debug"))
+        text_generator = await safe_create_task(slm(history, audio))
         t1, t2 = tee(text_generator, 2)  # Ensure the iterator can be reused
         i = 0
         async for chunk in t1:
@@ -100,3 +102,29 @@ def test_slm():
         response = ''.join([chunk async for chunk in t2])
         print(response)
     asyncio.run(fun())
+
+
+# def test_interpret():
+#     async def fun():
+#         interpret = config["interpret"]
+#         await interpret.setup(session_id="debug1")
+#         async def do_interpret():
+#             for i in range(0, len(audio), 2048):
+#                 chunk = audio[i : i + 2048]
+#                 await interpret(chunk)
+#             await asyncio.sleep(10)
+#             await interpret.ws.close()
+
+#         async def collect_interpret_results():
+#             all_speech = b""
+#             async for asr_text, ast_text, speech in interpret.results():
+#                 if asr_text:
+#                     print(f"asr_text: {asr_text}")
+#                 if ast_text:
+#                     print(f"ast_text: {ast_text}")
+#                 if speech:
+#                     all_speech += speech
+#                 with open("./tests/output.wav", "wb") as f:
+#                     f.write(pcm2wav(speech, 16000))
+#         await asyncio.gather(do_interpret(), collect_interpret_results())
+#     asyncio.run(fun())

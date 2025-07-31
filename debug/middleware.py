@@ -34,6 +34,8 @@ async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
                 msg = await src_ws.recv()
                 try:
                     payload = json.loads(msg)
+                    if payload.get("data_type") != "bytes":
+                        continue
                     b64 = payload["data"]
                     audio_bytes = base64.b64decode(b64)
                     print(f"[{label}] Audio chunk: {len(audio_bytes)} bytes")

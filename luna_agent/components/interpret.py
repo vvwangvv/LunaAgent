@@ -8,13 +8,13 @@ class Interpret:
     def __init__(self, base_url: str):
         self.base_url = base_url
         self.session_id = None
+        self.ws = None
 
     async def setup(self, session_id: str):
-        self.ws = await websockets.connect(self.base_url)
+        self.ws = await websockets.connect(f"{self.base_url}/ws/{session_id}")
         self.session_id = session_id
 
     async def __call__(self, chunk: bytes) -> AsyncGenerator[Tuple[bool, bytes], None]:
-        self.data += chunk
         await self.ws.send(chunk)
 
     async def results(self) -> AsyncGenerator[Tuple[bool, bytes], None]:

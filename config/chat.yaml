@@ -142,7 +142,3 @@ tts_control: !new:luna_agent.components.llm.LLM
         content: 我是小李，我觉得山东的蔬菜很好吃
       - role: assistant
         content: '{"speed": "default", "timbre": "default", "emotion": "default"}'
-
-
-interpret: !new:luna_agent.components.interpret.Interpret
-  base_url: "ws://localhost:7800"

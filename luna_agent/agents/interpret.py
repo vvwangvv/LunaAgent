@@ -67,7 +67,7 @@ class LunaAgent:
 
 
 """
-Endpoints of Live Interpretation Agent
+Endpoints of Live Interpret Agent
 """
 
 parser = argparse.ArgumentParser()
