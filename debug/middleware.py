@@ -111,7 +111,6 @@ async def ws_user_event(websocket: WebSocket, session_id: str):
 
 @app.post("/start_session")
 async def start_session(request: Request):
-    breakpoint()
     forward_url = "http://localhost:9001/start_session"
     async with httpx.AsyncClient() as client:
         response = await client.post(forward_url, json=await request.json())

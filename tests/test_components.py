@@ -132,7 +132,7 @@ def test_interpret():
     asyncio.run(fun())
 
 def test_resample():
-    resampler = StreamingResampler(input_sr=16000, output_sr=24000)
+    resampler = StreamingResampler(in_rate=16000, out_rate=24000)
     resampled = resampler(audio)
     with open("./tests/resampled.wav", "wb") as f:
         f.write(pcm2wav(resampled, 24000))
