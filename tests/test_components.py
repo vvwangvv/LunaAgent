@@ -13,11 +13,13 @@ with open("config/default.yaml", "r") as f:
 audio, sr = sf.read("./tests/test.wav")
 audio = (audio * 32768.0).astype(np.int16).tobytes()
 
+
 def test_asr():
     async def fun():
         asr = config["asr"]
         transcript = await asr(pcm2wav(audio))
         print(f"transcript: {transcript}")
+
     asyncio.run(fun())
 
 
@@ -25,29 +27,38 @@ def test_vad():
     async def fun():
         vad = config["vad"]
         await vad.setup()
+
         async def detect_speech():
             for i in range(0, len(audio), 2048):
                 chunk = audio[i : i + 2048]
                 await vad(chunk)
-            await asyncio.sleep(.5)
+            await asyncio.sleep(0.5)
             await vad.ws.close()
 
         async def collect_vad_results():
             async for user_is_speaking, user_speech in vad.results():
                 if user_speech:
                     print(f"user_speech: {len(user_speech)}")
+
         await asyncio.gather(detect_speech(), collect_vad_results())
+
     asyncio.run(fun())
+
 
 def test_tts():
     control = {
         "speech": audio,
+        "timbre": "self",
+        "transcript": "The houses are named after famous north rulers of the eye of man. The houses are named after famous north rulers of the eye of men.",
     }
+
     async def dummy_generator():
         text = "今天天气真不错，适合出去玩。" * 2
+
         async def generator():
             for i in range(0, len(text), 3):
                 yield text[i : i + 3]
+
         return generator()
 
     async def fun():
@@ -60,8 +71,9 @@ def test_tts():
             speech += chunk
         with open("./tests/output.wav", "wb") as f:
             f.write(pcm2wav(speech, 16000))
-        
+
     asyncio.run(fun())
+
 
 def test_tts_control():
     async def fun():
@@ -69,22 +81,28 @@ def test_tts_control():
         tts_control = config["tts_control"]
         control = await tts_control(text)
         assert control["timbre"] == "nezha"
+
     asyncio.run(fun())
+
 
 def test_diar_control():
     async def fun():
         text = "how many speakers are there in this audio?"
         diar_control = config["diar_control"]
         control = await diar_control(text)
-        assert control["diarization"] 
+        assert control["diarization"]
+
     asyncio.run(fun())
+
 
 def test_diar():
     async def fun():
         diar = config["diar"]
         await diar.setup(session_id="debug")
         result = await diar(audio)
+
     asyncio.run(fun())
+
 
 def test_slm():
     async def fun():
@@ -100,8 +118,9 @@ def test_slm():
                 await text_generator.aclose()
                 break
             print(chunk, end="")
-        response = ''.join([chunk async for chunk in t2])
+        response = "".join([chunk async for chunk in t2])
         print(response)
+
     asyncio.run(fun())
 
 
@@ -109,6 +128,7 @@ def test_interpret():
     async def fun():
         interpret = config["interpret"]
         await interpret.setup(session_id="debug1")
+
         async def do_interpret():
             for i in range(0, len(audio), 2048):
                 chunk = audio[i : i + 2048]
@@ -125,11 +145,13 @@ def test_interpret():
                     print(f"ast_text: {ast_text}")
                 if speech:
                     all_speech += speech
-            breakpoint()
             with open("./tests/output.wav", "wb") as f:
                 f.write(pcm2wav(all_speech, 16000))
+
         await asyncio.gather(do_interpret(), collect_interpret_results())
+
     asyncio.run(fun())
+
 
 def test_resample():
     resampler = StreamingResampler(in_rate=16000, out_rate=24000)

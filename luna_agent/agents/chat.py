@@ -1,4 +1,5 @@
 import argparse
+import time
 import asyncio
 import logging
 import uvicorn
@@ -30,7 +31,7 @@ class LunaAgent:
         self.asr: ASR = config["asr"]
         self.slm: SLM = config["slm"]
         self.tts: TTS = config["tts"]
-        self.stream: WebRTCData = config["stream"]
+        self.data: WebRTCData = config["data"]
         self.event: WebRTCEvent = config["event"]
         self.tts_control: Optional[LLM] = config["tts_control"]
         self.diar_control: Optional[LLM] = config["diar_control"]
@@ -39,16 +40,18 @@ class LunaAgent:
         self.sample_rate = 16000
 
         self.history: List[Dict] = []
-        self._user_is_speaking = False
+        self.user_is_speaking = False
         self.buffer = b""
 
     @classmethod
-    async def create(cls, config, user_audio_sample_rate: int = 16000):
+    async def create(cls, config, user_audio_sample_rate: int = 16000, user_audio_num_channels: int = 1):
         session = cls(config)
         await asyncio.gather(
             session.vad.setup(),
             session.slm.setup(session_id=session.session_id),
-            session.stream.setup(user_audio_sample_rate=user_audio_sample_rate),
+            session.data.setup(
+                user_audio_sample_rate=user_audio_sample_rate, user_audio_num_channels=user_audio_num_channels
+            ),
         )
         cls.sessions[session.session_id] = session
         return session
@@ -56,9 +59,9 @@ class LunaAgent:
     async def listen(self):
 
         async def receive_user_audio():
-            while not self.stream.ready:
+            while not self.data.ready:
                 await asyncio.sleep(0.1)
-            async for chunk in self.stream.read():
+            async for chunk in self.data.read():
                 self.buffer += chunk
 
         async def detect_speech():
@@ -72,21 +75,24 @@ class LunaAgent:
         async def response_if_speech():
             prev_response_task = None
             async for user_is_speaking, user_speech in self.vad.results():
-                self.user_is_speaking = user_is_speaking
+                if user_is_speaking != self.user_is_speaking:
+                    self.user_is_speaking = user_is_speaking
+                    await self.event.set_agent_can_speak(agent_can_speak=not user_is_speaking)
                 if user_speech:
                     if prev_response_task and not prev_response_task.done():
                         prev_response_task.cancel()
                     prev_response_task = safe_create_task(self.response(user_speech))
 
         await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
-    
+
     def mute_user(self):
         self.buffer += b"0x00" * self.sample_rate
 
     async def response(self, user_speech: bytes):
-        response_id = uuid4().hex
+        print("In response")
+        response_timestamp = int(time.time() * 1000)
         asr_task = safe_create_task(self.asr(user_speech))
-        slm_task = safe_create_task(self.slm(history=self.history, audio=user_speech))
+        slm_task = safe_create_task(self.slm(history=self.history[:], audio=user_speech))
         user_transcript = await asr_task
         add_user_message(self.history, audio=user_speech, transcript=user_transcript)
 
@@ -113,28 +119,20 @@ class LunaAgent:
             async for agent_speech in agent_speech_generator:
                 if self.user_is_speaking:
                     break
-                await self.stream.write(agent_speech, response_id=response_id)
+                await self.data.write(agent_speech, timestamp=response_timestamp)
         except asyncio.CancelledError:
-            logger.info(f"response {response_id} cancelled")
+            logger.info(f"response {response_timestamp} cancelled")
         finally:
             await agent_text_generator.aclose()
             await agent_speech_generator.aclose()
             agent_text = "".join([chunk async for chunk in agent_text_generator2])
             add_agent_message(history=self.history, message=agent_text)
 
-    @property
-    def user_is_speaking(self):
-        return self._user_is_speaking
-
-    @user_is_speaking.setter
-    def user_is_speaking(self, user_is_speaking: bool):
-        if self._user_is_speaking != user_is_speaking:
-            self.event.set_agent_can_speak(agent_can_speak=not user_is_speaking)
-        self._user_is_speaking = user_is_speaking
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, help="Path to the config file", default="config/default.yaml")
-parser.add_argument("--port", type=int, default=9001)
+parser.add_argument("--config", type=str, help="Path to the config file", default="config/chat.yaml")
+parser.add_argument("--port", type=int, default=9002)
+parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 args, _ = parser.parse_known_args()
 
 app = FastAPI()
@@ -152,12 +150,18 @@ app.add_middleware(
 async def start_session(request: Request):
     body = await request.json()
     sample_rate = body.get("sample_rate", 16000)
+    num_channels = body.get("num_channels", 1)
     with open(args.config, "r") as f:
         config = load_hyperpyyaml(f)
-    session = await LunaAgent.create(config, user_audio_sample_rate=sample_rate)
+    session = await LunaAgent.create(
+        config,
+        user_audio_sample_rate=sample_rate,
+        user_audio_num_channels=num_channels,
+    )
     safe_create_task(session.listen())
     logger.info(f"Started session with id: {session.session_id}")
     return {"session_id": session.session_id}
+
 
 @app.post("/mute")
 async def mute(request: Request):
@@ -166,11 +170,13 @@ async def mute(request: Request):
     LunaAgent.sessions.get(session_id).mute_user()
     return {"status": "success"}
 
+
 @app.websocket("/ws/agent/audio/{session_id}")
 async def ws_user_audio(websocket: WebSocket, session_id: str):
     await websocket.accept()
-    LunaAgent.sessions[session_id].stream.ws = websocket
-    await LunaAgent.sessions[session_id].stream.disconnect.wait()
+    LunaAgent.sessions[session_id].data.ws = websocket
+    await LunaAgent.sessions[session_id].data.disconnect.wait()
+
 
 @app.websocket("/ws/agent/event/{session_id}")
 async def ws_user_event(websocket: WebSocket, session_id: str):
@@ -180,4 +186,4 @@ async def ws_user_event(websocket: WebSocket, session_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("chat:app", host="0.0.0.0", port=args.port)
+    uvicorn.run("chat:app", host="0.0.0.0", port=args.port, reload=args.reload)

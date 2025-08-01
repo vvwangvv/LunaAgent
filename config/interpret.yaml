@@ -1,4 +1,4 @@
-stream: !new:luna_agent.components.WebRTCData
+data: !new:luna_agent.components.WebRTCData
 event: !new:luna_agent.components.WebRTCEvent
 
 interpret: !new:luna_agent.components.interpret.Interpret

@@ -28,7 +28,7 @@ class TTS:
     def setup(self):
         logger.info("StreamingTTSComponent setup")
 
-    async def tts(self, text: str, control = None):
+    async def tts(self, text: str, control=None):
         control = {} if control is None else control.copy()
         text = text.strip()
         if not text:
@@ -74,4 +74,5 @@ class TTS:
             if text:
                 async for chunk in self.tts(text, control=control):
                     yield chunk
+
         return generator()

@@ -1,6 +1,6 @@
 max_history_messages: 20
 
-stream: !new:luna_agent.components.WebRTCData
+data: !new:luna_agent.components.WebRTCData
 event: !new:luna_agent.components.WebRTCEvent
 
 vad: !new:luna_agent.components.vad.VAD

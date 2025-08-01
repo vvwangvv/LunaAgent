@@ -1,0 +1,3 @@
+data: !new:luna_agent.components.WebRTCData
+event: !new:luna_agent.components.WebRTCEvent
+echo: !new:luna_agent.components.echo.Echo

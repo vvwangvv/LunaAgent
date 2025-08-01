@@ -1,4 +1,5 @@
 import asyncio
+import time
 import base64
 import json
 from typing import AsyncGenerator
@@ -13,13 +14,12 @@ class WebRTCData:
         self.sample_rate = 16000
         self.disconnect = asyncio.Event()
 
-    async def setup(self, user_audio_sample_rate: int):
+    async def setup(self, user_audio_sample_rate: int, user_audio_num_channels: int = 1):
         if user_audio_sample_rate != self.sample_rate:
             self.resampler = StreamingResampler(
-                in_rate=user_audio_sample_rate,
-                out_rate=self.sample_rate
+                in_rate=user_audio_sample_rate, out_rate=self.sample_rate, num_channels=user_audio_num_channels
             )
-    
+
     @property
     def ready(self):
         return self.ws is not None
@@ -49,14 +49,19 @@ class WebRTCData:
         await self.ws.send_text(json.dumps(payload))
 
 
-
 class WebRTCEvent:
     def __init__(self):
         self.ws = None
         self.disconnect = asyncio.Event()
 
     async def set_agent_can_speak(self, agent_can_speak: bool):
-        await self.send_event("set_agent_can_speak", {"agent_can_speak": agent_can_speak})
+        await self.send_event(
+            "set_agent_can_speak",
+            {
+                "agent_can_speak": agent_can_speak,
+                "timestamp": int(time.time() * 1000),
+            },
+        )
 
     async def set_avatar(self, avatar: str):
         await self.send_event("set_avatar", {"avatar": avatar})
@@ -65,6 +70,6 @@ class WebRTCEvent:
         if not self.ws:
             raise RuntimeError("WebSocket connection is not established")
         try:
-            await self.ws.send_text( json.dumps( { "event": event, "data": data }))
+            await self.ws.send_text(json.dumps({"event": event, "data": data}))
         except WebSocketDisconnect:
             self.disconnect.set()

@@ -58,10 +58,11 @@ def format_msg(content):
 
 
 class StreamingResampler:
-    def __init__(self, in_rate, out_rate, block_size_ms=100):
+    def __init__(self, in_rate, out_rate, num_channels=1, block_size_ms=100):
         self.in_rate = in_rate
+        self.num_channels = num_channels
         self.out_rate = out_rate
-        self.block_size_bytes = int((block_size_ms / 1000) * in_rate * 2)
+        self.block_size_bytes = int((block_size_ms / 1000) * in_rate * 2) * num_channels
         self.buffer = b""
 
     def __call__(self, chunk: bytes, end=False) -> bytes:
@@ -73,7 +74,9 @@ class StreamingResampler:
             if num_blocks == 0:
                 return b""
             buffer, self.buffer = self.buffer[:num_blocks * self.block_size_bytes], self.buffer[num_blocks * self.block_size_bytes:]
-        samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, 1)
+        samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, self.num_channels)
+        if self.num_channels > 1:
+            samples = samples.mean(axis=1, keepdims=True)
         resampled = soxr.resample(samples, self.in_rate, self.out_rate)
         resampled_int16 = (np.clip(resampled, -1.0, 1.0) * 32768).astype(np.int16)
         return resampled_int16.tobytes()

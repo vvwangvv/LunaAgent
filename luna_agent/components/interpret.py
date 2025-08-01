@@ -11,10 +11,12 @@ class Interpret:
         self.session_id = None
         self.ws = None
         self.resampler = None
+        self.target_language = None
 
-    async def setup(self, session_id: str):
+    async def setup(self, session_id: str, target_language: str = "en"):
         self.ws = await websockets.connect(f"{self.base_url}/ws/{session_id}")
         self.session_id = session_id
+        self.target_language = target_language
 
     async def __call__(self, chunk: bytes) -> AsyncGenerator[Tuple[bool, bytes], None]:
         payload = {
@@ -23,9 +25,9 @@ class Interpret:
                 "bytes": base64.b64encode(chunk).decode("utf-8"),
                 "sample_rate": 16000,
                 "final": False,
-                "src_lang": "en",
-                "dst_lang": "zh",
-            }
+                # "src_lang": "en",
+                "dst_lang": self.target_language,
+            },
         }
         await self.ws.send(json.dumps(payload))
 
@@ -41,10 +43,7 @@ class Interpret:
                 speech = base64.b64decode(speech.encode("utf-8"))
                 sample_rate = message["sample_rate"]
                 if self.resampler is None and sample_rate != 16000:
-                    self.resampler = StreamingResampler(
-                        in_rate=sample_rate,
-                        out_rate=16000
-                    )
+                    self.resampler = StreamingResampler(in_rate=sample_rate, out_rate=16000)
                 speech = self.resampler(speech)
                 yield None, None, speech
             else:
