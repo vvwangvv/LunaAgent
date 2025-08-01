@@ -134,7 +134,7 @@ class LunaAgent:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/default.yaml")
-parser.add_argument("--port", type=int, default=8000)
+parser.add_argument("--port", type=int, default=9001)
 args, _ = parser.parse_known_args()
 
 app = FastAPI()
@@ -180,4 +180,4 @@ async def ws_user_event(websocket: WebSocket, session_id: str):
 
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="0.0.0.0", port=args.port)
+    uvicorn.run("chat:app", host="0.0.0.0", port=args.port)

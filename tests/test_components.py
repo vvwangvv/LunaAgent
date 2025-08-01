@@ -1,4 +1,5 @@
 import asyncio
+from luna_agent.utils import StreamingResampler
 from asyncstdlib.itertools import tee
 import soundfile as sf
 import numpy as np
@@ -124,7 +125,14 @@ def test_interpret():
                     print(f"ast_text: {ast_text}")
                 if speech:
                     all_speech += speech
+            breakpoint()
             with open("./tests/output.wav", "wb") as f:
                 f.write(pcm2wav(all_speech, 16000))
         await asyncio.gather(do_interpret(), collect_interpret_results())
     asyncio.run(fun())
+
+def test_resample():
+    resampler = StreamingResampler(input_sr=16000, output_sr=24000)
+    resampled = resampler(audio)
+    with open("./tests/resampled.wav", "wb") as f:
+        f.write(pcm2wav(resampled, 24000))

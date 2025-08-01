@@ -1,4 +1,5 @@
 import asyncio
+import soxr
 import numpy as np
 import io
 import soundfile as sf
@@ -54,3 +55,25 @@ def format_msg(content):
             fmt += c
 
     return fmt
+
+
+class StreamingResampler:
+    def __init__(self, input_sr, output_sr, block_size_ms=100):
+        self.input_sr = input_sr
+        self.output_sr = output_sr
+        self.block_size_bytes = int((block_size_ms / 1000) * input_sr * 2)
+        self.buffer = b""
+
+    def __call__(self, chunk: bytes, end=False) -> bytes:
+        self.buffer += chunk
+        if end:
+            buffer, self.buffer = self.buffer, b""
+        else:
+            num_blocks = len(self.buffer) // self.block_size_bytes
+            if num_blocks == 0:
+                return b""
+            buffer, self.buffer = self.buffer[:num_blocks * self.block_size_bytes], self.buffer[num_blocks * self.block_size_bytes:]
+        samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, 1)
+        resampled = soxr.resample(samples, self.input_sr, self.output_sr)
+        resampled_int16 = (np.clip(resampled, -1.0, 1.0) * 32768).astype(np.int16)
+        return resampled_int16.tobytes()

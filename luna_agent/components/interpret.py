@@ -2,6 +2,7 @@ import base64
 import websockets
 import json
 from typing import AsyncGenerator, Tuple
+from luna_agent.utils import StreamingResampler
 
 
 class Interpret:
@@ -9,6 +10,7 @@ class Interpret:
         self.base_url = base_url
         self.session_id = None
         self.ws = None
+        self.resampler = None
 
     async def setup(self, session_id: str):
         self.ws = await websockets.connect(f"{self.base_url}/ws/{session_id}")
@@ -37,6 +39,13 @@ class Interpret:
             elif message["type"] == "audio":
                 speech = message["bytes"]
                 speech = base64.b64decode(speech.encode("utf-8"))
+                sample_rate = message["sample_rate"]
+                if self.resampler is None and sample_rate != 16000:
+                    self.resampler = StreamingResampler(
+                        in_rate=sample_rate,
+                        out_rate=16000
+                    )
+                speech = self.resampler(speech)
                 yield None, None, speech
             else:
                 raise ValueError(f"Unknown message type: {message['type']}")

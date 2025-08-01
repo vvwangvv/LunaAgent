@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 import asyncio
 import httpx
+import uvicorn
 
 app = FastAPI()
 
@@ -110,16 +111,20 @@ async def ws_user_event(websocket: WebSocket, session_id: str):
 
 @app.post("/start_session")
 async def start_session(request: Request):
-    forward_url = "http://localhost:8001/start_session"
+    breakpoint()
+    forward_url = "http://localhost:9001/start_session"
     async with httpx.AsyncClient() as client:
         response = await client.post(forward_url, json=await request.json())
     
     session_id = response.json().get("session_id")
     connections["agent_audio"][session_id] = await websockets.connect(
-        f"ws://localhost:8001/ws/agent/audio/{session_id}"
+        f"ws://localhost:9001/ws/agent/audio/{session_id}"
     )
     connections["agent_event"][session_id] = await websockets.connect(
-        f"ws://localhost:8001/ws/agent/event/{session_id}"
+        f"ws://localhost:9001/ws/agent/event/{session_id}"
     )
     print(f"Session started with ID: {session_id}")
     return Response(content=response.content, media_type=response.headers.get("Content-Type", "application/json"))
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=27020, reload=True)

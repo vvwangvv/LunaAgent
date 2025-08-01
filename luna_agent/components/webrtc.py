@@ -1,10 +1,9 @@
 import asyncio
-import numpy as np
-import soxr
 import base64
 import json
 from typing import AsyncGenerator
 from fastapi import WebSocketDisconnect
+from luna_agent.utils import StreamingResampler
 
 
 class WebRTCData:
@@ -16,11 +15,9 @@ class WebRTCData:
 
     async def setup(self, user_audio_sample_rate: int):
         if user_audio_sample_rate != self.sample_rate:
-            self.resampler = soxr.Resampler(
-                channels=1,
+            self.resampler = StreamingResampler(
                 in_rate=user_audio_sample_rate,
-                out_rate=16000,
-                quality="HQ",
+                out_rate=self.sample_rate
             )
     
     @property
@@ -34,7 +31,7 @@ class WebRTCData:
             while True:
                 chunk = await self.ws.receive_bytes()
                 if self.resampler:
-                    chunk = self.resample_bytes(chunk)
+                    chunk = self.resampler(chunk)
                 yield chunk
         except WebSocketDisconnect:
             pass
@@ -51,14 +48,6 @@ class WebRTCData:
         payload = {"data": data, "data_type": data_type, **params}
         await self.ws.send_text(json.dumps(payload))
 
-    def resample_bytes(self, audio: bytes) -> bytes:
-        """Stateful chunk-wise resample with soxr."""
-        if self.resampler is None:
-            return audio
-        audio = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
-        audio = self.resampler.process(audio)
-        audio = (np.clip(audio, -1.0, 1.0) * 32768.0).astype(np.int16)
-        return audio.tobytes()
 
 
 class WebRTCEvent:
