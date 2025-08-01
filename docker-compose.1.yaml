@@ -8,10 +8,8 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
+            - count: all
               capabilities: [gpu]
-    runtime: nvidia
     restart: unless-stopped
 
   cosyvoice:
@@ -27,10 +25,8 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
+            - count: all
               capabilities: [gpu]
-    runtime: nvidia
     restart: unless-stopped
 
   vad:
@@ -46,8 +42,6 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
+            - count: all
               capabilities: [gpu]
-    runtime: nvidia
     restart: unless-stopped

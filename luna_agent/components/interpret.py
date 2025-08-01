@@ -15,15 +15,28 @@ class Interpret:
         self.session_id = session_id
 
     async def __call__(self, chunk: bytes) -> AsyncGenerator[Tuple[bool, bytes], None]:
-        await self.ws.send(chunk)
+        payload = {
+            "type": "audio",
+            "data": {
+                "bytes": base64.b64encode(chunk).decode("utf-8"),
+                "sample_rate": 16000,
+                "final": False,
+                "src_lang": "en",
+                "dst_lang": "zh",
+            }
+        }
+        await self.ws.send(json.dumps(payload))
 
     async def results(self) -> AsyncGenerator[Tuple[bool, bytes], None]:
         async for message in self.ws:
             message = json.loads(message)
-            asr_text = ast_text = speech = None
-            asr_text = message.get("asr", asr_text)
-            ast_text = message.get("ast", ast_text)
-            speech = message.get("speech", speech)
-            if speech:
+            if message["type"] == "asr":
+                yield message["text"], None, None
+            elif message["type"] == "ast":
+                yield None, message["text"], None
+            elif message["type"] == "audio":
+                speech = message["bytes"]
                 speech = base64.b64decode(speech.encode("utf-8"))
-            yield (asr_text, ast_text, speech)
+                yield None, None, speech
+            else:
+                raise ValueError(f"Unknown message type: {message['type']}")

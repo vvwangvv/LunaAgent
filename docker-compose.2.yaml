@@ -8,10 +8,8 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
+            - count: all
               capabilities: [gpu]
-    runtime: nvidia
     restart: unless-stopped
 
   diar:
@@ -23,8 +21,6 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all
+            - count: all
               capabilities: [gpu]
-    runtime: nvidia
     restart: unless-stopped

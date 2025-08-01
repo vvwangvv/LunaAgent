@@ -104,27 +104,27 @@ def test_slm():
     asyncio.run(fun())
 
 
-# def test_interpret():
-#     async def fun():
-#         interpret = config["interpret"]
-#         await interpret.setup(session_id="debug1")
-#         async def do_interpret():
-#             for i in range(0, len(audio), 2048):
-#                 chunk = audio[i : i + 2048]
-#                 await interpret(chunk)
-#             await asyncio.sleep(10)
-#             await interpret.ws.close()
+def test_interpret():
+    async def fun():
+        interpret = config["interpret"]
+        await interpret.setup(session_id="debug1")
+        async def do_interpret():
+            for i in range(0, len(audio), 2048):
+                chunk = audio[i : i + 2048]
+                await interpret(chunk)
+            await asyncio.sleep(10)
+            await interpret.ws.close()
 
-#         async def collect_interpret_results():
-#             all_speech = b""
-#             async for asr_text, ast_text, speech in interpret.results():
-#                 if asr_text:
-#                     print(f"asr_text: {asr_text}")
-#                 if ast_text:
-#                     print(f"ast_text: {ast_text}")
-#                 if speech:
-#                     all_speech += speech
-#                 with open("./tests/output.wav", "wb") as f:
-#                     f.write(pcm2wav(speech, 16000))
-#         await asyncio.gather(do_interpret(), collect_interpret_results())
-#     asyncio.run(fun())
+        async def collect_interpret_results():
+            all_speech = b""
+            async for asr_text, ast_text, speech in interpret.results():
+                if asr_text:
+                    print(f"asr_text: {asr_text}")
+                if ast_text:
+                    print(f"ast_text: {ast_text}")
+                if speech:
+                    all_speech += speech
+            with open("./tests/output.wav", "wb") as f:
+                f.write(pcm2wav(all_speech, 16000))
+        await asyncio.gather(do_interpret(), collect_interpret_results())
+    asyncio.run(fun())
