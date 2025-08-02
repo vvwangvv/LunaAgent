@@ -44,7 +44,7 @@ class Interpret:
                 sample_rate = message["sample_rate"]
                 if self.resampler is None and sample_rate != 16000:
                     self.resampler = StreamingResampler(in_rate=sample_rate, out_rate=16000)
-                speech = self.resampler(speech)
+                    speech = self.resampler(speech)
                 yield None, None, speech
             else:
                 raise ValueError(f"Unknown message type: {message['type']}")

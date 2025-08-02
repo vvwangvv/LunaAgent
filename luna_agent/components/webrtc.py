@@ -54,13 +54,10 @@ class WebRTCEvent:
         self.ws = None
         self.disconnect = asyncio.Event()
 
-    async def set_agent_can_speak(self, agent_can_speak: bool):
+    async def user_interrupt(self):
         await self.send_event(
-            "set_agent_can_speak",
-            {
-                "agent_can_speak": agent_can_speak,
-                "timestamp": int(time.time() * 1000),
-            },
+            "user_interrupt",
+            {"timestamp": int(time.time() * 1000)},
         )
 
     async def set_avatar(self, avatar: str):

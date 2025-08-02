@@ -51,7 +51,7 @@ class TTS:
             response = await client.post(self.base_url, files=files, data=data)
             async for chunk in response.aiter_bytes(chunk_size=4096):
                 if chunk:
-                    logger.debug("Streaming TTS chunk sent")
+                    logger.debug(f"Streaming TTS chunk sent {len(chunk)} bytes")
                     yield chunk
 
     async def __call__(self, text_generateor: AsyncGenerator[str, None] | str, control={}):

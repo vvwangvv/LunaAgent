@@ -26,12 +26,12 @@ class VAD:
             start = message.get("start", self.start)
             end = message.get("end", self.end)
             current = message.get("current", current)
-            if (start, end) == (self.start, self.end):
-                continue
-            self.start, self.end = start, end
-            if start < end:
-                user_speech: bytes = self.data[max(0, start - self.left_pad_samples) * 2 : end * 2]
-                yield (False, user_speech)
-            else:
+
+            if start > end:  # user is speaking
                 if end != 0 and current - start > self.voiced_samples_to_interrupt:
                     yield (True, None)
+            else:
+                if (start, end) != (self.start, self.end):
+                    user_speech: bytes = self.data[max(0, start - self.left_pad_samples) * 2 : end * 2]
+                    yield (False, user_speech)
+            self.start, self.end = start, end

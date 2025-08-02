@@ -11,7 +11,7 @@ from hyperpyyaml import load_hyperpyyaml
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-from luna_agent.utils import safe_create_task
+from luna_agent.utils import safe_create_task, logger
 from luna_agent.components import ASR, LLM, SLM, TTS, WebRTCEvent, WebRTCData, VAD
 from luna_agent.components.slm import add_user_message, add_agent_message
 
@@ -19,7 +19,7 @@ logging.basicConfig(
     format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger("luna_agent")
+
 logger.setLevel(logging.INFO)
 
 
@@ -76,8 +76,9 @@ class LunaAgent:
             prev_response_task = None
             async for user_is_speaking, user_speech in self.vad.results():
                 if user_is_speaking != self.user_is_speaking:
+                    logger.debug(f"User interrupt: {user_is_speaking}")
                     self.user_is_speaking = user_is_speaking
-                    await self.event.set_agent_can_speak(agent_can_speak=not user_is_speaking)
+                    await self.event.user_interrupt()
                 if user_speech:
                     if prev_response_task and not prev_response_task.done():
                         prev_response_task.cancel()
@@ -86,14 +87,15 @@ class LunaAgent:
         await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
 
     def mute_user(self):
+        logger.info("User muted")
         self.buffer += b"0x00" * self.sample_rate
 
     async def response(self, user_speech: bytes):
-        print("In response")
         response_timestamp = int(time.time() * 1000)
         asr_task = safe_create_task(self.asr(user_speech))
         slm_task = safe_create_task(self.slm(history=self.history[:], audio=user_speech))
         user_transcript = await asr_task
+        logger.debug(f"User transcript: {user_transcript}")
         add_user_message(self.history, audio=user_speech, transcript=user_transcript)
 
         tts_control_task = safe_create_task(
@@ -121,7 +123,7 @@ class LunaAgent:
                     break
                 await self.data.write(agent_speech, timestamp=response_timestamp)
         except asyncio.CancelledError:
-            logger.info(f"response {response_timestamp} cancelled")
+            logger.debug(f"response {response_timestamp} cancelled")
         finally:
             await agent_text_generator.aclose()
             await agent_speech_generator.aclose()

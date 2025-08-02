@@ -6,7 +6,7 @@ event: !new:luna_agent.components.WebRTCEvent
 vad: !new:luna_agent.components.vad.VAD
   base_url: "ws://localhost:27002/vad"
   left_pad_ms: 200
-  voiced_ms_to_interrupt: 500
+  voiced_ms_to_interrupt: 300
 
 asr: !new:luna_agent.components.asr.ASR
   base_url: "http://172.31.1.203:27003/asr"
