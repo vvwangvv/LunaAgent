@@ -62,6 +62,7 @@ class LunaAgent:
             while not self.data.ready:
                 await asyncio.sleep(0.1)
             async for chunk in self.data.read():
+                logger.debug(f"Received audio chunk of size {len(chunk)}")
                 self.buffer += chunk
 
         async def detect_speech():
@@ -75,14 +76,14 @@ class LunaAgent:
         async def response_if_speech():
             prev_response_task = None
             async for user_is_speaking, user_speech in self.vad.results():
-                if user_is_speaking != self.user_is_speaking:
-                    logger.debug(f"User interrupt: {user_is_speaking}")
-                    self.user_is_speaking = user_is_speaking
-                    await self.event.user_interrupt()
-                if user_speech:
+                if user_speech is not None:
                     if prev_response_task and not prev_response_task.done():
                         prev_response_task.cancel()
                     prev_response_task = safe_create_task(self.response(user_speech))
+                if user_is_speaking != self.user_is_speaking:
+                    logger.info(f"User interrupt: {user_is_speaking}")
+                    self.user_is_speaking = user_is_speaking
+                    await self.event.user_interrupt()
 
         await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
 
@@ -95,7 +96,7 @@ class LunaAgent:
         asr_task = safe_create_task(self.asr(user_speech))
         slm_task = safe_create_task(self.slm(history=self.history[:], audio=user_speech))
         user_transcript = await asr_task
-        logger.debug(f"User transcript: {user_transcript}")
+        logger.info(f"User transcript: {user_transcript}")
         add_user_message(self.history, audio=user_speech, transcript=user_transcript)
 
         tts_control_task = safe_create_task(
@@ -121,6 +122,7 @@ class LunaAgent:
             async for agent_speech in agent_speech_generator:
                 if self.user_is_speaking:
                     break
+                logger.debug(f"Agent speech chunk of size {len(agent_speech)}")
                 await self.data.write(agent_speech, timestamp=response_timestamp)
         except asyncio.CancelledError:
             logger.debug(f"response {response_timestamp} cancelled")

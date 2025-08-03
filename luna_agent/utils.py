@@ -73,7 +73,10 @@ class StreamingResampler:
             num_blocks = len(self.buffer) // self.block_size_bytes
             if num_blocks == 0:
                 return b""
-            buffer, self.buffer = self.buffer[:num_blocks * self.block_size_bytes], self.buffer[num_blocks * self.block_size_bytes:]
+            buffer, self.buffer = (
+                self.buffer[: num_blocks * self.block_size_bytes],
+                self.buffer[num_blocks * self.block_size_bytes :],
+            )
         samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, self.num_channels)
         if self.num_channels > 1:
             samples = samples.mean(axis=1, keepdims=True)

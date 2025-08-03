@@ -1,6 +1,7 @@
 import websockets
 import json
 from typing import AsyncGenerator, Tuple
+from luna_agent.utils import logger
 
 
 class VAD:
@@ -26,6 +27,8 @@ class VAD:
             start = message.get("start", self.start)
             end = message.get("end", self.end)
             current = message.get("current", current)
+
+            # logger.info(f"VAD result: start={start}, end={end}, current={current}, len(data)={len(self.data)}")
 
             if start > end:  # user is speaking
                 if end != 0 and current - start > self.voiced_samples_to_interrupt:

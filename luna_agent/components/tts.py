@@ -25,9 +25,6 @@ class TTS:
         self.sample_rate = 16000
         self.force_default = force_default
 
-    def setup(self):
-        logger.info("StreamingTTSComponent setup")
-
     async def tts(self, text: str, control=None):
         control = {} if control is None else control.copy()
         text = text.strip()
