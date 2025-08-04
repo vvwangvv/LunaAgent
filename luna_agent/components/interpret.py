@@ -43,7 +43,7 @@ class Interpret:
                 speech = base64.b64decode(speech.encode("utf-8"))
                 sample_rate = message["sample_rate"]
                 if self.resampler is None and sample_rate != 16000:
-                    self.resampler = StreamingResampler(in_rate=sample_rate, out_rate=16000)
+                    self.resampler = StreamingResampler(src_rate=sample_rate, dst_rate=16000)
                     speech = self.resampler(speech)
                 yield None, None, speech
             else:

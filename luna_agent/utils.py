@@ -7,6 +7,7 @@ import base64
 import asyncio
 import logging
 import numpy as np
+from collections import deque
 
 logger = logging.getLogger("luna_agent")
 
@@ -58,11 +59,11 @@ def format_msg(content):
 
 
 class StreamingResampler:
-    def __init__(self, in_rate, out_rate, num_channels=1, block_size_ms=100):
-        self.in_rate = in_rate
-        self.num_channels = num_channels
-        self.out_rate = out_rate
-        self.block_size_bytes = int((block_size_ms / 1000) * in_rate * 2) * num_channels
+    def __init__(self, src_rate, dst_rate, src_channels=1, dst_channels=1, block_size_ms=100):
+        self.src_rate = src_rate
+        self.src_channels = src_channels
+        self.dst_rate = dst_rate
+        self.block_size_bytes = int((block_size_ms / 1000) * src_rate * 2) * src_channels
         self.buffer = b""
 
     def __call__(self, chunk: bytes, end=False) -> bytes:
@@ -80,6 +81,29 @@ class StreamingResampler:
         samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, self.num_channels)
         if self.num_channels > 1:
             samples = samples.mean(axis=1, keepdims=True)
-        resampled = soxr.resample(samples, self.in_rate, self.out_rate)
+        resampled = soxr.resample(samples, self.src_rate, self.dst_rate)
         resampled_int16 = (np.clip(resampled, -1.0, 1.0) * 32768).astype(np.int16)
         return resampled_int16.tobytes()
+
+
+class ByteQueue:
+    def __init__(self):
+        self._dq = deque()
+
+    def append(self, data: bytes | bytearray):
+        self._dq.extend(data)
+
+    def pop(self, n: int) -> bytes:
+        return bytes(self._dq.popleft() for _ in range(min(n, len(self._dq))))
+
+    def peek(self, n: int) -> bytes:
+        return bytes([self._dq[i] for i in range(min(n, len(self._dq)))])
+
+    def __len__(self):
+        return len(self._dq)
+
+    def clear(self):
+        self._dq.clear()
+
+    def to_bytes(self):
+        return bytes(self._dq)

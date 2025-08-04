@@ -98,7 +98,11 @@ class SLM:
         add_user_message(messages, audio=audio)
 
         completion = await self.client.chat.completions.create(
-            model=self.model, messages=self.prompts + messages, stream=True, **self.completion_params
+            model=self.model,
+            messages=self.prompts + messages,
+            stream=True,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            **self.completion_params,
         )
 
         async def generator():

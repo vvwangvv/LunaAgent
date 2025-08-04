@@ -154,7 +154,7 @@ def test_interpret():
 
 
 def test_resample():
-    resampler = StreamingResampler(in_rate=16000, out_rate=24000)
+    resampler = StreamingResampler(src_rate=16000, dst_rate=24000)
     resampled = resampler(audio)
     with open("./tests/resampled.wav", "wb") as f:
         f.write(pcm2wav(resampled, 24000))
