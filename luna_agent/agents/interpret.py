@@ -41,9 +41,7 @@ class LunaAgent:
     ):
         session = cls(config)
         await asyncio.gather(
-            session.data.setup(
-                user_audio_sample_rate=user_audio_sample_rate, user_audio_num_channels=user_audio_num_channels
-            ),
+            session.data.setup(read_src_sr=user_audio_sample_rate, read_src_channels=user_audio_num_channels),
             session.interpret.setup(session_id=session.session_id, target_language=target_language),
         )
         cls.sessions[session.session_id] = session

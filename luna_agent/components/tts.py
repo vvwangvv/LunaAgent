@@ -25,6 +25,9 @@ class TTS:
         self.sample_rate = 16000
         self.force_default = force_default
 
+    async def setup(self, session_id: str):
+        self.session_id = session_id
+
     async def tts(self, text: str, control=None):
         control = {} if control is None else control.copy()
         text = text.strip()
@@ -34,7 +37,7 @@ class TTS:
         control["stream"] = True
         control["text_frontend"] = True
         control["gen_text"] = text
-        control["session_id"] = control.pop("session_id", uuid4().hex)
+        control["session_id"] = self.session_id
         control["dtype"] = "np.int16"
         control["ref_text"] = control.pop("transcript", "")
         control["voice"] = control.pop("timbre", "default")

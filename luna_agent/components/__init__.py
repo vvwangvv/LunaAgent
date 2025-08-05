@@ -6,6 +6,6 @@ from .asr import ASR
 from .interpret import Interpret
 from .echo import Echo
 
-from .webrtc import WebRTCEvent, WebRTCData
+from .webrtc import WebRTCEvent, WebRTCData, WebRTCDataLiveStream
 
-__all__ = ["VAD", "ASR", "SLM", "LLM", "TTS", "Interpret", "Echo", "WebRTCEvent", "WebRTCData"]
+__all__ = ["VAD", "ASR", "SLM", "LLM", "TTS", "Interpret", "Echo", "WebRTCEvent", "WebRTCData", "WebRTCDataLiveStream"]

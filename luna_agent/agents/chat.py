@@ -24,12 +24,6 @@ logging.basicConfig(
 logger.setLevel(logging.INFO)
 
 
-"""
-TODO:
-Agent Status: Listening, Thinking, Speaking
-"""
-
-
 class AgentStatus(Enum):
     LISTENING = "listening"
     THINKING = "thinking"
@@ -55,6 +49,7 @@ class LunaAgent:
         self.history: List[Dict] = []
         self.agent_status = AgentStatus.LISTENING
         self.buffer = b""
+        self.prev_response_task: Optional[asyncio.Task] = None
 
     @classmethod
     async def create(cls, config, user_audio_sample_rate: int = 16000, user_audio_num_channels: int = 1):
@@ -62,16 +57,13 @@ class LunaAgent:
         await asyncio.gather(
             session.vad.setup(),
             session.slm.setup(session_id=session.session_id),
-            session.data.setup(
-                user_audio_sample_rate=user_audio_sample_rate, user_audio_num_channels=user_audio_num_channels
-            ),
+            session.tts.setup(session_id=session.session_id),
+            session.data.setup(read_src_sr=user_audio_sample_rate, read_src_channels=user_audio_num_channels),
         )
         cls.sessions[session.session_id] = session
 
         async def on_flush():
-            if session.data.ready:
-                await session.data.write(b"", timestamp=int(time.time() * 1000))
-                session.data.flush()
+            await session.agent_status_changed(AgentStatus.LISTENING)
 
         session.data.on_flush = on_flush
         return session
@@ -94,17 +86,14 @@ class LunaAgent:
                 await self.vad(buffer)
 
         async def response_if_speech():
-            prev_response_task = None
             async for user_is_speaking, user_speech in self.vad.results():
                 if self.agent_status != AgentStatus.LISTENING and user_is_speaking:
                     logger.info(f"User interrupt: {user_is_speaking}")
                     await self.agent_status_changed(AgentStatus.LISTENING)
-                    if prev_response_task and not prev_response_task.done():
-                        prev_response_task.cancel()
+                    await self.cancel_prev_response()
                 if user_speech is not None:
-                    if prev_response_task and not prev_response_task.done():
-                        prev_response_task.cancel()
-                    prev_response_task = safe_create_task(self.response(user_speech))
+                    await self.cancel_prev_response()
+                    self.prev_response_task = safe_create_task(self.response(user_speech))
 
         await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
 
@@ -131,22 +120,22 @@ class LunaAgent:
         tts_control["speech"] = user_speech
         tts_control["transcript"] = user_transcript
 
-        if diar_control.get("response", True):
+        if not diar_control.get("response", True):
             return
 
         agent_text_generator = await slm_task
         agent_text_generator1, agent_text_generator2 = tee(agent_text_generator, 2)
         tts_task = safe_create_task(self.tts(text_generateor=agent_text_generator1, control=tts_control))
-        await self.event.set_avatar(tts_control["timbre"])
+        await self.set_avatar(tts_control["timbre"])
 
         agent_speech_generator = await tts_task
         await self.agent_status_changed(AgentStatus.SPEAKING)
         try:
             async for agent_speech in agent_speech_generator:
-                logger.debug(f"Agent speech chunk of size {len(agent_speech)}")
+                logger.info(f"Agent speech chunk of size {len(agent_speech)}")
                 await self.data.write(agent_speech, timestamp=response_timestamp)
         except asyncio.CancelledError:
-            logger.debug(f"response {response_timestamp} cancelled")
+            logger.info(f"response {response_timestamp} cancelled")
         finally:
             await agent_text_generator.aclose()
             await agent_speech_generator.aclose()
@@ -158,11 +147,16 @@ class LunaAgent:
         self.agent_status = status
         await self.event.send_event(
             event="agent_status_changed",
-            data={"timestamp": int(time.time() * 1000), "status": status.name},
+            data={"timestamp": int(time.time() * 1000), "status": status.value},
         )
 
     async def set_avatar(self, avatar: str):
-        await self.send_event(event="set_avatar", data={"avatar": avatar})
+        await self.event.send_event(event="set_avatar", data={"avatar": avatar})
+
+    async def cancel_prev_response(self):
+        if self.prev_response_task and not self.prev_response_task.done():
+            self.prev_response_task.cancel()
+        self.data.clear()
 
 
 parser = argparse.ArgumentParser()

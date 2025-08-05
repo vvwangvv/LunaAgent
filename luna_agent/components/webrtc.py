@@ -3,8 +3,11 @@ import time
 import base64
 import json
 from typing import AsyncGenerator
-from fastapi import WebSocketDisconnect, WebSocket, WebSocketState
+
+from fastapi import WebSocketDisconnect, WebSocket
 from luna_agent.utils import StreamingResampler, safe_create_task, ByteQueue
+from starlette.websockets import WebSocketState
+from luna_agent.utils import logger
 
 
 class WebRTCData:
@@ -30,7 +33,7 @@ class WebRTCData:
         if read_src_sr != read_dst_sr or read_src_channels != read_dst_channels:
             self.read_resampler = StreamingResampler(
                 src_rate=read_src_sr,
-                src_rate=read_dst_sr,
+                dst_rate=read_dst_sr,
                 src_channels=read_src_channels,
                 dst_channels=read_dst_channels,
             )
@@ -77,9 +80,15 @@ class WebRTCData:
         payload = {"data": data, "data_type": data_type, **params}
         await self.ws.send_text(json.dumps(payload))
 
+    def flush(self):
+        pass
+
+    def clear(self):
+        pass
+
 
 class WebRTCDataLiveStream(WebRTCData):
-    def __init__(self, chunk_ms: int = 50):
+    def __init__(self, chunk_ms: int = 100):
         super().__init__()
         self.chunk_ms = chunk_ms
         self.on_flush = lambda: None
@@ -89,39 +98,45 @@ class WebRTCDataLiveStream(WebRTCData):
     async def setup(self, write_dst_sr=16000, write_dst_channels=1, **kwargs):
         await super().setup(write_dst_sr=write_dst_sr, **kwargs)
 
-        self.bytes2ms = lambda x: x * write_dst_sr // 1000 * 2 * write_dst_channels
-        self.ms2bytes = lambda x: x * 1000 // write_dst_sr // 2 // write_dst_channels
+        self.ms2bytes = lambda x: x * write_dst_sr // 1000 * 2 * write_dst_channels
+        self.bytes2ms = lambda x: x * 1000 // write_dst_sr // 2 // write_dst_channels
         self.chunk_bytes = self.ms2bytes(self.chunk_ms)
 
     async def connect(self, websocket: WebSocket):
+        logger.info(f"Connecting WebRTCDataLiveStream with chunk size {self.chunk_bytes} bytes")
         await super().connect(websocket)
         safe_create_task(self.livestream())
 
     async def livestream(self):
         while True:
             try:
-                chunk = self.buffer.peak(self.chunk_bytes)
+                chunk = self.buffer.pop(self.chunk_bytes)
                 if not chunk:
                     if self.flushed:
-                        await self.on_flush()
                         self.flushed = False
-                        continue
-                    await asyncio.sleep(self.chunk_ms / 1000)
-
-                await self.ws.write(chunk)
-                await asyncio.sleep(self.bytes2ms(len(chunk)) / 1000)
-                super().write(chunk)
+                        await self.on_flush()
+                else:
+                    logger.info(f"Sending chunk of size {len(chunk)}")
+                    await super().write(chunk)
+                await asyncio.sleep(self.chunk_ms / 1000)
             except WebSocketDisconnect:
                 break
 
     def flush(self):
+        """
+        TODO: change the name
+        indicate end of a response
+        """
         self.flushed = True
 
+    def clear(self):
+        self.buffer.clear()
+
     async def write(self, data: bytes | str, **params):
-        self.flushed = False
         if isinstance(data, str):
             return await super().write(data, **params)
-        self.buffer.push(data)
+        self.flushed = False
+        self.buffer.append(data)
 
 
 class WebRTCEvent:
@@ -129,8 +144,12 @@ class WebRTCEvent:
         self.ws = None
         self.disconnect = asyncio.Event()
 
+    async def connect(self, websocket: WebSocket):
+        self.ws = websocket
+        await self.ws.accept()
+
     async def send_event(self, event: str, data: dict):
-        if not self.ws:
+        if not self.ws or self.ws.client_state != WebSocketState.CONNECTED:
             raise RuntimeError("WebSocket connection is not established")
         try:
             await self.ws.send_text(json.dumps({"event": event, "data": data}))

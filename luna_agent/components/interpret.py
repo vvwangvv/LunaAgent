@@ -26,7 +26,7 @@ class Interpret:
                 "sample_rate": 16000,
                 "final": False,
                 # "src_lang": "en",
-                "dst_lang": self.target_language,
+                "tgt_lang": self.target_language,
             },
         }
         await self.ws.send(json.dumps(payload))
