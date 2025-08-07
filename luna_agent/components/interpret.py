@@ -2,7 +2,7 @@ import base64
 import websockets
 import json
 from typing import AsyncGenerator, Tuple
-from luna_agent.utils import StreamingResampler
+from luna_agent.utils import StreamingResampler, logger
 
 
 class Interpret:
@@ -48,3 +48,9 @@ class Interpret:
                 yield None, None, speech
             else:
                 raise ValueError(f"Unknown message type: {message['type']}")
+
+    async def close(self):
+        try:
+            await self.ws.close()
+        except Exception as e:
+            logger.error(f"Error closing Interpret websocket: {e}")

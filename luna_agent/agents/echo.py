@@ -35,9 +35,7 @@ class LunaAgent:
     async def create(cls, config, user_audio_sample_rate: int = 16000, user_audio_num_channels: int = 1, **kwargs):
         session = cls(config)
         await asyncio.gather(
-            session.data.setup(
-                user_audio_sample_rate=user_audio_sample_rate, user_audio_num_channels=user_audio_num_channels
-            ),
+            session.data.setup(read_src_sr=user_audio_sample_rate, read_src_channels=user_audio_num_channels),
             session.echo.setup(),
         )
         cls.sessions[session.session_id] = session
@@ -104,14 +102,14 @@ async def start_session(request: Request):
 async def ws_user_audio(websocket: WebSocket, session_id: str):
     await websocket.accept()
     LunaAgent.sessions[session_id].data.ws = websocket
-    await LunaAgent.sessions[session_id].data.disconnect.wait()
+    await LunaAgent.sessions[session_id].data.closed.wait()
 
 
 @app.websocket("/ws/agent/event/{session_id}")
 async def ws_user_event(websocket: WebSocket, session_id: str):
     await websocket.accept()
     LunaAgent.sessions[session_id].event.ws = websocket
-    await LunaAgent.sessions[session_id].event.disconnect.wait()
+    await LunaAgent.sessions[session_id].event.closed.wait()
 
 
 if __name__ == "__main__":

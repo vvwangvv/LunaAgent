@@ -4,7 +4,7 @@ import logging
 import uvicorn
 from uuid import uuid4
 from hyperpyyaml import load_hyperpyyaml
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from luna_agent.utils import safe_create_task
@@ -52,8 +52,11 @@ class LunaAgent:
         async def receive_user_audio():
             while not self.data.ready:
                 await asyncio.sleep(0.1)
-            async for chunk in self.data.read():
-                self.buffer += chunk
+            try:
+                async for chunk in self.data.read():
+                    self.buffer += chunk
+            except WebSocketDisconnect:
+                await self.destroy()
 
         async def interpret():
             while True:
@@ -73,6 +76,16 @@ class LunaAgent:
                     await self.data.write(speech)
 
         await asyncio.gather(receive_user_audio(), interpret(), response())
+
+    async def destroy(self):
+        logger.info(f"Destroying session {self.session_id}")
+        await asyncio.gather(
+            self.data.close(),
+            self.event.close(),
+            self.interpret.close(),
+        )
+        if self.session_id in self.sessions:
+            del self.sessions[self.session_id]
 
 
 """
@@ -119,14 +132,14 @@ async def start_session(request: Request):
 async def ws_user_audio(websocket: WebSocket, session_id: str):
     await websocket.accept()
     LunaAgent.sessions[session_id].data.ws = websocket
-    await LunaAgent.sessions[session_id].data.disconnect.wait()
+    await LunaAgent.sessions[session_id].data.closed.wait()
 
 
 @app.websocket("/ws/agent/event/{session_id}")
 async def ws_user_event(websocket: WebSocket, session_id: str):
     await websocket.accept()
     LunaAgent.sessions[session_id].event.ws = websocket
-    await LunaAgent.sessions[session_id].event.disconnect.wait()
+    await LunaAgent.sessions[session_id].event.closed.wait()
 
 
 if __name__ == "__main__":

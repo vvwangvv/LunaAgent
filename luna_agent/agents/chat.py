@@ -8,7 +8,7 @@ from typing import Optional
 from typing import Dict, List
 from asyncstdlib.itertools import tee
 from hyperpyyaml import load_hyperpyyaml
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from luna_agent.utils import safe_create_task, logger
@@ -73,9 +73,12 @@ class LunaAgent:
         async def receive_user_audio():
             while not self.data.ready:
                 await asyncio.sleep(0.1)
-            async for chunk in self.data.read():
-                logger.debug(f"Received audio chunk of size {len(chunk)}")
-                self.buffer += chunk
+            try:
+                async for chunk in self.data.read():
+                    logger.debug(f"Received audio chunk of size {len(chunk)}")
+                    self.buffer += chunk
+            except WebSocketDisconnect:
+                await self.destroy()
 
         async def detect_speech():
             while True:
@@ -151,12 +154,24 @@ class LunaAgent:
         )
 
     async def set_avatar(self, avatar: str):
-        await self.event.send_event(event="set_avatar", data={"avatar": avatar})
+        if avatar != "default":
+            await self.event.send_event(event="set_avatar", data={"avatar": avatar})
 
     async def cancel_prev_response(self):
         if self.prev_response_task and not self.prev_response_task.done():
             self.prev_response_task.cancel()
         self.data.clear()
+
+    async def destroy(self):
+        logger.info(f"Destroying session {self.session_id}")
+        await asyncio.gather(
+            self.cancel_prev_response(),
+            self.vad.close(),
+            self.data.close(),
+            self.event.close(),
+        )
+        if self.session_id in self.sessions:
+            del self.sessions[self.session_id]
 
 
 parser = argparse.ArgumentParser()
@@ -204,13 +219,13 @@ async def mute(request: Request):
 @app.websocket("/ws/agent/audio/{session_id}")
 async def ws_user_audio(websocket: WebSocket, session_id: str):
     await LunaAgent.sessions[session_id].data.connect(websocket)
-    await LunaAgent.sessions[session_id].data.disconnect.wait()
+    await LunaAgent.sessions[session_id].data.closed.wait()
 
 
 @app.websocket("/ws/agent/event/{session_id}")
 async def ws_user_event(websocket: WebSocket, session_id: str):
     await LunaAgent.sessions[session_id].event.connect(websocket)
-    await LunaAgent.sessions[session_id].event.disconnect.wait()
+    await LunaAgent.sessions[session_id].event.closed.wait()
 
 
 if __name__ == "__main__":

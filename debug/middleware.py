@@ -63,6 +63,7 @@ async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
                 await dst_ws.send(audio_bytes)
     except WebSocketDisconnect:
         print(f"[{label}] disconnected")
+        await asyncio.gather(dst_ws.close(), src_ws.close())
     except Exception as e:
         print(f"[{label}] error: {e}")
         raise

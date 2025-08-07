@@ -38,3 +38,9 @@ class VAD:
                     user_speech: bytes = self.data[max(0, start - self.left_pad_samples) * 2 : end * 2]
                     yield (False, user_speech)
             self.start, self.end = start, end
+
+    async def close(self):
+        try:
+            await self.ws.close()
+        except Exception as e:
+            logger.error(f"Error closing VAD websocket: {e}")

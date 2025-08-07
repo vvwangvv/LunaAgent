@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
 
   cosyvoice:
-    image: lunalabs-acr-registry.cn-guangzhou.cr.aliyuncs.com/luna/luna-agent-cosyvoice:latest
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-cosyvoice:latest
     container_name: cosyvoice
     ports:
       - "27005:8000"

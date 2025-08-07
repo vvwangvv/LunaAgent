@@ -17,7 +17,7 @@ class WebRTCData:
         self.ws = None
         self.read_resampler = None
         self.write_resampler = None
-        self.disconnect = asyncio.Event()
+        self.closed = asyncio.Event()
 
     async def setup(
         self,
@@ -57,16 +57,11 @@ class WebRTCData:
     async def read(self) -> AsyncGenerator[bytes, None]:
         if not self.ready:
             raise RuntimeError("WebSocket connection is not established")
-        try:
-            while True:
-                chunk = await self.ws.receive_bytes()
-                if self.read_resampler:
-                    chunk = self.read_resampler(chunk)
-                yield chunk
-        except WebSocketDisconnect:
-            pass
-        finally:
-            self.disconnect.set()
+        while True:
+            chunk = await self.ws.receive_bytes()
+            if self.read_resampler:
+                chunk = self.read_resampler(chunk)
+            yield chunk
 
     async def write(self, data: bytes | str, **params):
         if not self.ready:
@@ -85,6 +80,11 @@ class WebRTCData:
 
     def clear(self):
         pass
+
+    async def close(self):
+        if self.ws and self.ws.client_state == WebSocketState.CONNECTED:
+            await self.ws.close()
+        self.closed.set()
 
 
 class WebRTCDataLiveStream(WebRTCData):
@@ -142,7 +142,7 @@ class WebRTCDataLiveStream(WebRTCData):
 class WebRTCEvent:
     def __init__(self):
         self.ws = None
-        self.disconnect = asyncio.Event()
+        self.closed = asyncio.Event()
 
     async def connect(self, websocket: WebSocket):
         self.ws = websocket
@@ -151,7 +151,9 @@ class WebRTCEvent:
     async def send_event(self, event: str, data: dict):
         if not self.ws or self.ws.client_state != WebSocketState.CONNECTED:
             raise RuntimeError("WebSocket connection is not established")
-        try:
-            await self.ws.send_text(json.dumps({"event": event, "data": data}))
-        except WebSocketDisconnect:
-            self.disconnect.set()
+        await self.ws.send_text(json.dumps({"event": event, "data": data}))
+
+    async def close(self):
+        if self.ws and self.ws.client_state == WebSocketState.CONNECTED:
+            await self.ws.close()
+        self.closed.set()
