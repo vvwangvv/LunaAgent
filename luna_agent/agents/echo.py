@@ -60,10 +60,6 @@ class LunaAgent:
         await asyncio.gather(receive_user_audio(), echo())
 
 
-"""
-Endpoints of Live Interpret Agent
-"""
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/echo.yaml")
 parser.add_argument("--port", type=int, default=9003)

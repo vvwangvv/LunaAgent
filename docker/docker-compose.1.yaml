@@ -1,6 +1,6 @@
 services:
   f5tts:
-    image: f5tts:latest
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-tts-f5:latest
     container_name: f5tts
     expose:
       - "8999"
@@ -13,10 +13,13 @@ services:
     restart: unless-stopped
 
   cosyvoice:
-    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-cosyvoice:latest
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-tts-cosyvoice:latest
     container_name: cosyvoice
     ports:
       - "27005:8000"
+    volumes:
+      - /root/vv/LunaModels/tts/prompts:/prompts
+    # command: sleep inf
     environment:
       F5TTS_URL: "http://f5tts:8999/tts"
     depends_on:
@@ -30,7 +33,7 @@ services:
     restart: unless-stopped
 
   vad:
-    image: lunalabs-acr-registry.cn-guangzhou.cr.aliyuncs.com/luna/luna-agent-silero:latest
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-vad-silero:latest
     container_name: vad
     ports:
       - "27002:8000"
