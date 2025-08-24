@@ -1,10 +1,10 @@
 # Luna Agent
 
-> DO NOT commit to the main branch, commit to a new branch make PR for merging
+> DO NOT commit to the main branch, commit to a new branch make Merge Request
 
 > DO NOT operate under /root/vv/LunaAgent, ANY changes in this directory will be reset by `git reset --hard`
 
-> 不要向 main 分支 commit, commit 到新分支并提PR.
+> 不要向 main 分支 commit, commit 到新分支并提 Merge Request.
 
 > 不要进入 /root/vv/LunaAgent 进行**任何**操作，所有改动将被 `git reset --hard`
 
@@ -70,13 +70,7 @@ Open http://localhost:28003 and start session. Note that the frontend is simplif
 
 ## How to commit (TBD)
 
-You should create pull requests (PR) to merge changes to the main branch. But deleting a repo seems not possible by now...
-
-### Temperary solution:
-
-Commit and push to a new branch, contact 王巍 to merge into the main branch (code review required).
-
-NEVER commit to the main branch.
+Commit and push the new branch. Create [Merge Reuqest](https://ysgit.lunalabs.cn/lunalabs/luna-models/LunaAgent/-/merge_requests).
 
 
 # Luna Models
