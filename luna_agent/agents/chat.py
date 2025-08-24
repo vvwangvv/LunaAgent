@@ -11,7 +11,7 @@ from hyperpyyaml import load_hyperpyyaml
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from luna_agent.utils import safe_create_task, logger
+from luna_agent.utils import logger, AsyncTaskMixin, safe_create_task
 from luna_agent.components import ASR, LLM, SLM, TTS, WebRTCEvent, WebRTCDataLiveStream, VAD
 from luna_agent.components.slm import add_user_message, add_agent_message
 from enum import Enum
@@ -30,10 +30,11 @@ class AgentStatus(Enum):
     SPEAKING = "speaking"
 
 
-class LunaAgent:
+class LunaAgent(AsyncTaskMixin):
     sessions = {}
 
     def __init__(self, config):
+        super().__init__()
         self.vad: VAD = config["vad"]
         self.asr: ASR = config["asr"]
         self.slm: SLM = config["slm"]
@@ -83,7 +84,7 @@ class LunaAgent:
         async def detect_speech():
             while True:
                 if len(self.buffer) == 0:
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.1)
                     continue
                 buffer, self.buffer = self.buffer, b""
                 await self.vad(buffer)
@@ -96,7 +97,7 @@ class LunaAgent:
                     await self.cancel_prev_response()
                 if user_speech is not None:
                     await self.cancel_prev_response()
-                    self.prev_response_task = safe_create_task(self.response(user_speech))
+                    self.prev_response_task = self.create_task(self.response(user_speech))
 
         await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
 
@@ -107,16 +108,16 @@ class LunaAgent:
     async def response(self, user_speech: bytes):
         await self.agent_status_changed(AgentStatus.THINKING)
         response_timestamp = int(time.time() * 1000)
-        asr_task = safe_create_task(self.asr(user_speech))
-        slm_task = safe_create_task(self.slm(history=self.history[:], audio=user_speech))
+        asr_task = self.create_task(self.asr(user_speech))
+        slm_task = self.create_task(self.slm(history=self.history[:], audio=user_speech))
         user_transcript = await asr_task
         logger.info(f"User transcript: {user_transcript}")
         add_user_message(self.history, audio=user_speech, transcript=user_transcript)
 
-        tts_control_task = safe_create_task(
+        tts_control_task = self.create_task(
             self.tts_control(user_transcript) if self.tts_control else asyncio.sleep(0, result={})
         )
-        diar_control_task = safe_create_task(
+        diar_control_task = self.create_task(
             self.diar_control(user_transcript) if self.diar_control else asyncio.sleep(0, result={})
         )
         tts_control, diar_control = await asyncio.gather(tts_control_task, diar_control_task)
@@ -128,14 +129,14 @@ class LunaAgent:
 
         agent_text_generator = await slm_task
         agent_text_generator1, agent_text_generator2 = tee(agent_text_generator, 2)
-        tts_task = safe_create_task(self.tts(text_generateor=agent_text_generator1, control=tts_control))
+        tts_task = self.create_task(self.tts(text_generateor=agent_text_generator1, control=tts_control))
         await self.set_avatar(tts_control["timbre"])
 
         agent_speech_generator = await tts_task
         await self.agent_status_changed(AgentStatus.SPEAKING)
         try:
             async for agent_speech in agent_speech_generator:
-                logger.info(f"Agent speech chunk of size {len(agent_speech)}")
+                logger.debug(f"Agent speech chunk of size {len(agent_speech)}")
                 await self.data.write(agent_speech, timestamp=response_timestamp)
         except asyncio.CancelledError:
             logger.info(f"response {response_timestamp} cancelled")
@@ -170,6 +171,7 @@ class LunaAgent:
             self.data.close(),
             self.event.close(),
         )
+        super().destroy()
         if self.session_id in self.sessions:
             del self.sessions[self.session_id]
 

@@ -116,7 +116,7 @@ class WebRTCDataLiveStream(WebRTCData):
                         self.flushed = False
                         await self.on_flush()
                 else:
-                    logger.info(f"Sending chunk of size {len(chunk)}")
+                    logger.debug(f"Sending chunk of size {len(chunk)}")
                     await super().write(chunk)
                 await asyncio.sleep(self.chunk_ms / 1000)
             except WebSocketDisconnect:
@@ -151,6 +151,9 @@ class WebRTCEvent:
     async def send_event(self, event: str, data: dict):
         if not self.ws or self.ws.client_state != WebSocketState.CONNECTED:
             raise RuntimeError("WebSocket connection is not established")
+        # data_type = 'bytes'
+        # payload = {"data": data, "data_type": data_type,}
+        # await self.ws.send_text(json.dumps(payload))
         await self.ws.send_text(json.dumps({"event": event, "data": data}))
 
     async def close(self):

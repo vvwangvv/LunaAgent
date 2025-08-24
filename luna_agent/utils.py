@@ -44,6 +44,23 @@ def safe_create_task(coro, *, name=None):
     return task
 
 
+class AsyncTaskMixin:
+    def __init__(self):
+        self.tasks = {}
+
+    def create_task(self, coro, *, name=None):
+        task = safe_create_task(coro, name=name)
+        self.tasks[id(task)] = task
+        task.add_done_callback(lambda t: self.tasks.pop(id(t), None))
+        return task
+
+    def destroy(self):
+        for task in self.tasks.values():
+            if not task.done():
+                task.cancel()
+        self.tasks.clear()
+
+
 def format_msg(content):
     fmt = ""
     for c in content:
