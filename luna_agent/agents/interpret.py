@@ -1,14 +1,16 @@
 import argparse
 import asyncio
 import logging
-import uvicorn
+import os
 from uuid import uuid4
-from hyperpyyaml import load_hyperpyyaml
+
+import uvicorn
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from hyperpyyaml import load_hyperpyyaml
 
+from luna_agent.components import Interpret, WebRTCData, WebRTCEvent
 from luna_agent.utils import safe_create_task
-from luna_agent.components import WebRTCEvent, WebRTCData, Interpret
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
@@ -92,9 +94,10 @@ class LunaAgent:
 Endpoints of Live Interpret Agent
 """
 
+PORT = int(os.getenv("AGENT_PORT", "28001"))
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/interpret.yaml")
-parser.add_argument("--port", type=int, default=9001)
+parser.add_argument("--port", type=int, default=PORT)
 parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 args, _ = parser.parse_known_args()
 

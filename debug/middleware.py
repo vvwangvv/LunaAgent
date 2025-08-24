@@ -1,11 +1,12 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-import os
-import websockets
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 import asyncio
+import os
+
 import httpx
 import uvicorn
+import websockets
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 app = FastAPI()
 
@@ -25,8 +26,11 @@ connections = {
     "user_event": {},
 }
 
-import json
+
+AGENT_PORT = int(os.getenv("AGENT_PORT", "9002"))
+
 import base64
+import json
 
 
 async def forward(src_ws: WebSocket, dst_ws: WebSocket, label: str):
@@ -118,17 +122,16 @@ async def ws_user_event(websocket: WebSocket, session_id: str):
 
 @app.post("/start_session")
 async def start_session(request: Request):
-    forward_host_port = os.environ.get("FORWARD_HOST_PORT", "localhost:9002")
-    print(f"Forwarding to: {forward_host_port}")
+    print(f"Forwarding to: {AGENT_PORT}")
     async with httpx.AsyncClient() as client:
-        response = await client.post(f"http://{forward_host_port}/start_session", json=await request.json())
+        response = await client.post(f"http://localhost:{AGENT_PORT}/start_session", json=await request.json())
 
     session_id = response.json().get("session_id")
     connections["agent_audio"][session_id] = await websockets.connect(
-        f"ws://{forward_host_port}/ws/agent/audio/{session_id}"
+        f"ws://localhost:{AGENT_PORT}/ws/agent/audio/{session_id}"
     )
     connections["agent_event"][session_id] = await websockets.connect(
-        f"ws://{forward_host_port}/ws/agent/event/{session_id}"
+        f"ws://localhost:{AGENT_PORT}/ws/agent/event/{session_id}"
     )
     print(f"Session started with ID: {session_id}")
     return Response(content=response.content, media_type=response.headers.get("Content-Type", "application/json"))
@@ -138,8 +141,6 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--backend-port", type=int, default=9002)
-    parser.add_argument("--port", type=int, default=27020)
+    PORT = int(os.getenv("MIDDLEWARE_PORT", "28002"))
     args = parser.parse_args()
-    os.environ["FORWARD_HOST_PORT"] = f"localhost:{args.backend_port}"
-    uvicorn.run("middleware:app", host="0.0.0.0", port=args.port, reload=True)
+    uvicorn.run("middleware:app", host="0.0.0.0", port=PORT, reload=True)

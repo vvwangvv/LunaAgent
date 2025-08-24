@@ -1,14 +1,16 @@
 import argparse
 import asyncio
 import logging
-import uvicorn
+import os
 from uuid import uuid4
-from hyperpyyaml import load_hyperpyyaml
+
+import uvicorn
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from hyperpyyaml import load_hyperpyyaml
 
+from luna_agent.components import Echo, WebRTCData, WebRTCEvent
 from luna_agent.utils import safe_create_task
-from luna_agent.components import WebRTCEvent, WebRTCData, Echo
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
@@ -60,9 +62,10 @@ class LunaAgent:
         await asyncio.gather(receive_user_audio(), echo())
 
 
+PORT = int(os.getenv("AGENT_PORT", "9003"))
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/echo.yaml")
-parser.add_argument("--port", type=int, default=9003)
+parser.add_argument("--port", type=int, default=PORT)
 parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 args, _ = parser.parse_known_args()
 

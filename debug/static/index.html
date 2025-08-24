@@ -6,14 +6,13 @@
   <title>Voice Chat App with Microphone Waveform Animation</title>
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="/static/bootstrap.min.css"">
-  <link rel="stylesheet" href="/static/font-awesome/css/all.min.css">">
+  <link rel="stylesheet" href="/static/font-awesome/css/all.min.css">
   <link rel="stylesheet" href="/static/bg.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <div class="chat-container relative mx-auto w-100 h-100 max-w-full overflow-hidden bg-gradient-to-br from-[--color-a] via-[--color-b] to-[--color-c] text-white duration-500 ease-in [transition-property:_--color-a,_--color-b,_--color-c] before:absolute before:left-[20%] before:top-[10%] before:h-[50%] before:w-[70%] before:origin-[60%] before:animate-blob before:bg-gradient-to-br before:from-[--color-a] before:to-[--color-b] before:blur-[50px] before:brightness-125 after:absolute after:left-[40%] after:top-[30%] after:h-[80%] after:w-[70%] after:origin-[60%] after:animate-blob-reverse after:bg-gradient-to-br after:from-[--color-a] after:to-[--color-b] after:blur-[50px] after:brightness-125" style="--color-a: rgb(51, 153, 255, 0.3); --color-b: rgb(244, 229, 77, 0.3); --color-c: rgb(255, 170, 51, 0.3)">
     <div class="d-flex mx-auto justify-content-between aspect-[9/16] flex-column mw-100 mh-100">
-    <!-- <div class="logo" id="logo"> <img src="./{{ url_for('static', filename='logo.png') }}"/> </div> -->
       <!-- Transcript section -->
       <div class="transcript" id="transcript">
         <p><strong>User:</strong> Hello!</p>
@@ -116,7 +115,7 @@
       await micAudioContext.resume();
     }
 
-    const response = await fetch(`http://localhost:27020/start_session`, {
+    const response = await fetch(`http://localhost:{{ port }}/start_session`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sample_rate: 16000 })
@@ -124,8 +123,8 @@
     const responseData = await response.json();
     sessionId = responseData.session_id;
 
-    wsAudio = new WebSocket(`ws://localhost:27020/ws/user/audio/${sessionId}`);
-    wsEvent = new WebSocket(`ws://localhost:27020/ws/user/event/${sessionId}`);
+    wsAudio = new WebSocket(`ws://localhost:{{ port }}/ws/user/audio/${sessionId}`);
+    wsEvent = new WebSocket(`ws://localhost:{{ port }}/ws/user/event/${sessionId}`);
     wsAudio.binaryType = 'arraybuffer';
 
     initAudioPlayback();

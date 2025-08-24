@@ -1,4 +1,5 @@
 import argparse
+import os
 import time
 import asyncio
 import logging
@@ -176,9 +177,10 @@ class LunaAgent(AsyncTaskMixin):
             del self.sessions[self.session_id]
 
 
+PORT = int(os.getenv("AGENT_PORT", "28001"))
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/chat.yaml")
-parser.add_argument("--port", type=int, default=9002)
+parser.add_argument("--port", type=int, default=PORT)
 parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 args, _ = parser.parse_known_args()
 
