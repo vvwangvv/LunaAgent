@@ -1,6 +1,6 @@
 services:
-  asr:
-    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-paraformer:latest
+  asr-paraformer:
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-asr-paraformer:latest
     container_name: asr-paraformer
     ports:
       - "27003:8000"
@@ -11,9 +11,9 @@ services:
             - count: all
               capabilities: [gpu]
     restart: unless-stopped
-services:
-  asr:
-    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-sensevoice:sensevoice
+
+  asr-sensevoice:
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-asr-sensevoice:latest
     container_name: asr-sensevoice
     ports:
       - "27103:8000"
@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   diar:
-    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-diar:latest
+    image: lunalabs-cn-shanghai.cr.volces.com/luna/luna-agent-diar-default:latest
     container_name: diar
     ports:
       - "27004:8000"
