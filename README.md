@@ -41,6 +41,8 @@ pip install -e ./
 
 Start 3 tmux panels and run these command to start chat agent, websocket middleware and webui frontend:
 
+> You should edit env.sh in case of port conflicts, which means another user is developing on 4090-1.
+
 1. Agent:
     ```bash
     source env.sh
