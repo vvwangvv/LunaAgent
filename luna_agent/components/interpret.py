@@ -1,7 +1,9 @@
 import base64
-import websockets
 import json
 from typing import AsyncGenerator, Tuple
+
+import websockets
+
 from luna_agent.utils import StreamingResampler, logger
 
 
@@ -13,12 +15,23 @@ class Interpret:
         self.resampler = None
         self.target_language = None
 
-    async def setup(self, session_id: str, target_language: str = "en"):
+    async def setup(
+        self,
+        session_id: str,
+        target_language: str = "en",
+        voice_clone=False,
+        generate_speech=True,
+        noise_reduction=False,
+    ):
         self.ws = await websockets.connect(f"{self.base_url}/ws/{session_id}")
         self.session_id = session_id
         self.target_language = target_language
+        self.voice_clone = voice_clone
+        self.generate_speech = generate_speech
+        self.noise_reduction = noise_reduction
 
     async def __call__(self, chunk: bytes) -> AsyncGenerator[Tuple[bool, bytes], None]:
+        #
         payload = {
             "type": "audio",
             "data": {
@@ -27,6 +40,9 @@ class Interpret:
                 "final": False,
                 # "src_lang": "en",
                 "tgt_lang": self.target_language,
+                "voice_clone": self.voice_clone,
+                "generate_speech": self.generate_speech,
+                "noise_reduction": self.noise_reduction,
             },
         }
         await self.ws.send(json.dumps(payload))

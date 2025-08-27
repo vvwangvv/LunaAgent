@@ -1,7 +1,7 @@
 import argparse
 import asyncio
+import base64
 import logging
-import os
 from uuid import uuid4
 
 import uvicorn
@@ -27,11 +27,9 @@ class LunaAgent:
         self.data: WebRTCData = config["data"]
         self.event: WebRTCEvent = config["event"]
         self.interpret: Interpret = config["interpret"]
-
         self.session_id = uuid4().hex
         self.sample_rate = 16000
-
-        self.buffer = b""
+        self.buffer = asyncio.Queue()
 
     @classmethod
     async def create(
@@ -40,11 +38,20 @@ class LunaAgent:
         user_audio_sample_rate: int = 16000,
         user_audio_num_channels: int = 1,
         target_language: str = "en",
+        voice_clone=False,
+        generate_speech=True,
+        noise_reduction=True,
     ):
         session = cls(config)
         await asyncio.gather(
             session.data.setup(read_src_sr=user_audio_sample_rate, read_src_channels=user_audio_num_channels),
-            session.interpret.setup(session_id=session.session_id, target_language=target_language),
+            session.interpret.setup(
+                session_id=session.session_id,
+                target_language=target_language,
+                voice_clone=voice_clone,
+                generate_speech=generate_speech,
+                noise_reduction=noise_reduction,
+            ),
         )
         cls.sessions[session.session_id] = session
         return session
@@ -56,17 +63,18 @@ class LunaAgent:
                 await asyncio.sleep(0.1)
             try:
                 async for chunk in self.data.read():
-                    self.buffer += chunk
+                    await self.buffer.put(chunk)
+                await self.buffer.put(None)
             except WebSocketDisconnect:
                 await self.destroy()
 
-        async def interpret():
+        async def interpret_audio():
             while True:
-                if len(self.buffer) == 0:
-                    await asyncio.sleep(0)
-                    continue
-                buffer, self.buffer = self.buffer, b""
-                await self.interpret(buffer)
+                chunk = await self.buffer.get()
+                if chunk is None:
+                    break
+
+                await self.interpret(chunk)
 
         async def response():
             async for asr_text, ast_text, speech in self.interpret.results():
@@ -77,7 +85,7 @@ class LunaAgent:
                 if speech is not None:
                     await self.data.write(speech)
 
-        await asyncio.gather(receive_user_audio(), interpret(), response())
+        await asyncio.gather(receive_user_audio(), interpret_audio(), response())
 
     async def destroy(self):
         logger.info(f"Destroying session {self.session_id}")
@@ -94,10 +102,9 @@ class LunaAgent:
 Endpoints of Live Interpret Agent
 """
 
-PORT = int(os.getenv("AGENT_PORT", "28002"))
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/interpret.yaml")
-parser.add_argument("--port", type=int, default=PORT)
+parser.add_argument("--port", type=int, default=9001)
 parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 args, _ = parser.parse_known_args()
 
@@ -118,6 +125,10 @@ async def start_session(request: Request):
     sample_rate = body.get("sample_rate", 16000)
     num_channels = body.get("num_channels", 1)
     target_language = body.get("target_language", "en")
+    voice_clone = body.get("voice_clone", False)
+    generate_speech = body.get("generate_speech", True)
+    noise_reduction = body.get("noise_reduction", True)
+    print(body)
     with open(args.config, "r") as f:
         config = load_hyperpyyaml(f)
     session = await LunaAgent.create(
@@ -125,6 +136,9 @@ async def start_session(request: Request):
         user_audio_sample_rate=sample_rate,
         user_audio_num_channels=num_channels,
         target_language=target_language,
+        voice_clone=voice_clone,
+        generate_speech=generate_speech,
+        noise_reduction=noise_reduction,
     )
     safe_create_task(session.listen())
     logger.info(f"Started session with id: {session.session_id}")
