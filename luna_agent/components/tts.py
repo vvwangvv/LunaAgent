@@ -1,11 +1,12 @@
-import httpx
-from typing import AsyncGenerator
 import json
 import logging
-
-from uuid import uuid4
-from luna_agent.utils import pcm2wav
 import re
+from typing import AsyncGenerator
+from uuid import uuid4
+
+import httpx
+
+from luna_agent.utils import pcm2wav
 
 logger = logging.getLogger("luna_agent")
 
@@ -20,9 +21,9 @@ def extract_tts_text(text):
 
 
 class TTS:
-    def __init__(self, base_url, force_default=False):
+    def __init__(self, base_url, sample_rate: int = 16000, force_default=False):
         self.base_url = base_url
-        self.sample_rate = 16000
+        self.sample_rate = sample_rate
         self.force_default = force_default
 
     async def setup(self, session_id: str):

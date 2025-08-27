@@ -42,6 +42,7 @@ slm: !new:luna_agent.components.slm.SLM
 
 tts: !new:luna_agent.components.tts.TTS
   base_url: "http://localhost:27005/cosyvoice/"
+  sample_rate: 24000
 
 diar_control: !new:luna_agent.components.llm.LLM
   base_url: "http://172.31.64.2:27001/v1"

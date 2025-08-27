@@ -1,13 +1,12 @@
 import asyncio
-import soxr
-import numpy as np
-import io
-import soundfile as sf
 import base64
-import asyncio
+import io
 import logging
-import numpy as np
 from collections import deque
+
+import numpy as np
+import soundfile as sf
+import soxr
 
 logger = logging.getLogger("luna_agent")
 
@@ -95,8 +94,8 @@ class StreamingResampler:
                 self.buffer[: num_blocks * self.block_size_bytes],
                 self.buffer[num_blocks * self.block_size_bytes :],
             )
-        samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, self.num_channels)
-        if self.num_channels > 1:
+        samples = (np.frombuffer(buffer, dtype=np.int16) / 32768).astype(np.float32).reshape(-1, self.src_channels)
+        if self.src_channels > 1:
             samples = samples.mean(axis=1, keepdims=True)
         resampled = soxr.resample(samples, self.src_rate, self.dst_rate)
         resampled_int16 = (np.clip(resampled, -1.0, 1.0) * 32768).astype(np.int16)

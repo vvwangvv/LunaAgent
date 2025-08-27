@@ -195,7 +195,7 @@
   }
 
   function initAudioPlayback() {
-    playbackAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    playbackAudioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
     scriptNode = playbackAudioContext.createScriptProcessor(4096, 1, 1);
     scriptNode.onaudioprocess = (e) => {
       const output = e.outputBuffer.getChannelData(0);

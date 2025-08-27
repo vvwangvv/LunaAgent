@@ -94,7 +94,7 @@ class LunaAgent:
 Endpoints of Live Interpret Agent
 """
 
-PORT = int(os.getenv("AGENT_PORT", "28001"))
+PORT = int(os.getenv("AGENT_PORT", "28002"))
 parser = argparse.ArgumentParser()
 parser.add_argument("--config", type=str, help="Path to the config file", default="config/interpret.yaml")
 parser.add_argument("--port", type=int, default=PORT)

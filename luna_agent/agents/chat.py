@@ -1,21 +1,29 @@
 import argparse
-import os
-import time
 import asyncio
 import logging
-import uvicorn
+import os
+import time
+from enum import Enum
+from typing import Dict, List, Optional
 from uuid import uuid4
-from typing import Optional
-from typing import Dict, List
+
+import uvicorn
 from asyncstdlib.itertools import tee
-from hyperpyyaml import load_hyperpyyaml
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from hyperpyyaml import load_hyperpyyaml
 
-from luna_agent.utils import logger, AsyncTaskMixin, safe_create_task
-from luna_agent.components import ASR, LLM, SLM, TTS, WebRTCEvent, WebRTCDataLiveStream, VAD
-from luna_agent.components.slm import add_user_message, add_agent_message
-from enum import Enum
+from luna_agent.components import (
+    ASR,
+    LLM,
+    SLM,
+    TTS,
+    VAD,
+    WebRTCDataLiveStream,
+    WebRTCEvent,
+)
+from luna_agent.components.slm import add_agent_message, add_user_message
+from luna_agent.utils import AsyncTaskMixin, logger, safe_create_task
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
@@ -60,7 +68,12 @@ class LunaAgent(AsyncTaskMixin):
             session.vad.setup(),
             session.slm.setup(session_id=session.session_id),
             session.tts.setup(session_id=session.session_id),
-            session.data.setup(read_src_sr=user_audio_sample_rate, read_src_channels=user_audio_num_channels),
+            session.data.setup(
+                read_src_sr=user_audio_sample_rate,
+                read_src_channels=user_audio_num_channels,
+                write_src_sr=session.tts.sample_rate,
+                write_dst_sr=session.tts.sample_rate,
+            ),
         )
         cls.sessions[session.session_id] = session
 

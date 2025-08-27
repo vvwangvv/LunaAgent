@@ -1,13 +1,13 @@
 import asyncio
-import time
 import base64
 import json
+import time
 from typing import AsyncGenerator
 
-from fastapi import WebSocketDisconnect, WebSocket
-from luna_agent.utils import StreamingResampler, safe_create_task, ByteQueue
+from fastapi import WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
-from luna_agent.utils import logger
+
+from luna_agent.utils import ByteQueue, StreamingResampler, logger, safe_create_task
 
 
 class WebRTCData:
@@ -42,8 +42,8 @@ class WebRTCData:
             self.write_resampler = StreamingResampler(
                 src_rate=write_src_sr,
                 dst_rate=write_dst_sr,
-                src_num_channels=write_src_channels,
-                dst_num_channels=write_dst_channels,
+                src_channels=write_src_channels,
+                dst_channels=write_dst_channels,
             )
 
     @property
