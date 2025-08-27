@@ -31,7 +31,7 @@ class LunaAgent:
         self.session_id = uuid4().hex
         self.sample_rate = 16000
 
-        self.buffer = b""
+        self.buffer = asyncio.Queue()
 
     @classmethod
     async def create(cls, config, user_audio_sample_rate: int = 16000, user_audio_num_channels: int = 1, **kwargs):
@@ -49,15 +49,15 @@ class LunaAgent:
             while not self.data.ready:
                 await asyncio.sleep(0.1)
             async for chunk in self.data.read():
-                self.buffer += chunk
+                await self.buffer.put(chunk)
+            await self.buffer.put(None)
 
         async def echo():
             while True:
-                if len(self.buffer) == 0:
-                    await asyncio.sleep(0)
-                    continue
-                buffer, self.buffer = self.buffer, b""
-                await self.data.write(buffer)
+                chunk = await self.buffer.get()
+                if chunk is None:
+                    break
+                await self.data.write(chunk)
 
         await asyncio.gather(receive_user_audio(), echo())
 

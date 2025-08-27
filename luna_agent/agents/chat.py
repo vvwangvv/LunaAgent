@@ -58,7 +58,7 @@ class LunaAgent(AsyncTaskMixin):
 
         self.history: List[Dict] = []
         self.agent_status = AgentStatus.LISTENING
-        self.buffer = b""
+        self.buffer = asyncio.Queue()
         self.prev_response_task: Optional[asyncio.Task] = None
 
     @classmethod
@@ -91,17 +91,17 @@ class LunaAgent(AsyncTaskMixin):
             try:
                 async for chunk in self.data.read():
                     logger.debug(f"Received audio chunk of size {len(chunk)}")
-                    self.buffer += chunk
+                    await self.buffer.put(chunk)
+                await self.buffer.put(None)
             except WebSocketDisconnect:
                 await self.destroy()
 
         async def detect_speech():
             while True:
-                if len(self.buffer) == 0:
-                    await asyncio.sleep(0.1)
-                    continue
-                buffer, self.buffer = self.buffer, b""
-                await self.vad(buffer)
+                chunk = await self.buffer.get()
+                if chunk is None:
+                    break
+                await self.vad(chunk)
 
         async def response_if_speech():
             async for user_is_speaking, user_speech in self.vad.results():

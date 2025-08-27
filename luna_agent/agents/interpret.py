@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import base64
 import logging
 from uuid import uuid4
 
