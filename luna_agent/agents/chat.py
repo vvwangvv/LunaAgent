@@ -113,11 +113,14 @@ class LunaAgent(AsyncTaskMixin):
                     await self.cancel_prev_response()
                     self.prev_response_task = self.create_task(self.response(user_speech))
 
-        await asyncio.gather(receive_user_audio(), detect_speech(), response_if_speech())
+        await asyncio.gather(
+            receive_user_audio(), self.create_task(detect_speech()), self.create_task(response_if_speech())
+        )
 
-    def mute_user(self):
+    async def mute_user(self):
         logger.info("User muted")
-        self.buffer += b"0x00" * self.sample_rate
+        chunk = b"0x00" * self.sample_rate
+        await self.buffer.put(chunk)
 
     async def response(self, user_speech: bytes):
         await self.agent_status_changed(AgentStatus.THINKING)
@@ -229,7 +232,7 @@ async def start_session(request: Request):
 async def mute(request: Request):
     body = await request.json()
     session_id = body.get("session_id")
-    LunaAgent.sessions.get(session_id).mute_user()
+    await LunaAgent.sessions.get(session_id).mute_user()
     return {"status": "success"}
 
 
